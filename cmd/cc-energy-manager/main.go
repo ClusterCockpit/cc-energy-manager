@@ -8,7 +8,10 @@ import (
 	"fmt"
 
 	"github.com/ClusterCockpit/cc-energy-manager/internal/api"
+	"github.com/ClusterCockpit/cc-metric-collector/collectors"
 )
+
+var likwid_collector collectors.LikwidMetric
 
 func main() {
 
