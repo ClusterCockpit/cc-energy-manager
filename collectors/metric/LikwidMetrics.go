@@ -29,10 +29,10 @@ import (
 	"time"
 	"unsafe"
 
-	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
-	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
-	topo "github.com/ClusterCockpit/cc-metric-collector/pkg/ccTopology"
-	agg "github.com/ClusterCockpit/cc-metric-collector/tree/main/internal/metricAggregator"
+	agg "github.com/ClusterCockpit/cc-energy-manager/internal/metricAggregator"
+	cclog "github.com/ClusterCockpit/cc-energy-manager/pkg/ccLogger"
+	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/ccMetric"
+	topo "github.com/ClusterCockpit/cc-energy-manager/pkg/ccTopology"
 
 	"github.com/NVIDIA/go-nvml/pkg/dl"
 	"golang.design/x/thread"

@@ -4,11 +4,11 @@ import (
 	"sync"
 	"time"
 
-	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
+	cclog "github.com/ClusterCockpit/cc-energy-manager/pkg/ccLogger"
 
-	agg "github.com/ClusterCockpit/cc-metric-collector/internal/metricAggregator"
-	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
-	mct "github.com/ClusterCockpit/cc-metric-collector/pkg/multiChanTicker"
+	agg "github.com/ClusterCockpit/cc-energy-manager/internal/metricAggregator"
+	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/ccMetric"
+	mct "github.com/ClusterCockpit/cc-energy-manager/pkg/multiChanTicker"
 )
 
 type metricCachePeriod struct {

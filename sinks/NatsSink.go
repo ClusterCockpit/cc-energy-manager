@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
-	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
+	cclog "github.com/ClusterCockpit/cc-energy-manager/pkg/ccLogger"
+	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/ccMetric"
 	influx "github.com/influxdata/line-protocol"
 	nats "github.com/nats-io/nats.go"
 )

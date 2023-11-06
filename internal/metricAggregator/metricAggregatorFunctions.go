@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	topo "github.com/ClusterCockpit/cc-metric-collector/pkg/ccTopology"
+	topo "github.com/ClusterCockpit/cc-energy-manager/pkg/ccTopology"
 )
 
 /*

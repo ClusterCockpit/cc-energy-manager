@@ -41,9 +41,9 @@ import (
 
 	//	mr "github.com/ClusterCockpit/cc-metric-collector/internal/metricRouter"
 	mr ""
-	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
-	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
-	mct "github.com/ClusterCockpit/cc-metric-collector/pkg/multiChanTicker"
+	cclog "github.com/ClusterCockpit/cc-energy-manager/pkg/ccLogger"
+	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/ccMetric"
+	mct "github.com/ClusterCockpit/cc-energy-manager/pkg/multiChanTicker"
 )
 
 type CentralConfigFile struct {
