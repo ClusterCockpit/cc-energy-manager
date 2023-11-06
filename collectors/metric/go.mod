@@ -1,13 +1,17 @@
-module github.com/ClusterCockpit/cc-energy-manager
+module metric
 
 go 1.21.1
 
-require github.com/ClusterCockpit/cc-metric-collector v0.6.6
+require (
+	github.com/ClusterCockpit/cc-metric-collector v0.6.6
+	github.com/NVIDIA/go-nvml v0.12.0-1
+	golang.design/x/thread v0.0.0-20210122121316-335e9adffdf1
+	gopkg.in/fsnotify.v1 v1.4.7
+)
 
 require (
 	github.com/ClusterCockpit/cc-units v0.4.0 // indirect
 	github.com/ClusterCockpit/go-rocm-smi v0.3.0 // indirect
-	github.com/NVIDIA/go-nvml v0.12.0-1 // indirect
 	github.com/PaesslerAG/gval v1.2.2 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -41,9 +45,9 @@ require (
 	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/nats-io/jwt/v2 v2.5.3 // indirect
+	github.com/nats-io/jwt/v2 v2.5.2 // indirect
 	github.com/nats-io/nats.go v1.28.0 // indirect
-	github.com/nats-io/nkeys v0.4.6 // indirect
+	github.com/nats-io/nkeys v0.4.4 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.9 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -59,14 +63,12 @@ require (
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
-	golang.design/x/thread v0.0.0-20210122121316-335e9adffdf1 // indirect
 	golang.org/x/arch v0.4.0 // indirect
-	golang.org/x/crypto v0.14.0 // indirect
+	golang.org/x/crypto v0.12.0 // indirect
 	golang.org/x/exp v0.0.0-20230811145659-89c5cff77bcb // indirect
 	golang.org/x/net v0.14.0 // indirect
-	golang.org/x/sys v0.13.0 // indirect
-	golang.org/x/text v0.13.0 // indirect
+	golang.org/x/sys v0.11.0 // indirect
+	golang.org/x/text v0.12.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
-	gopkg.in/fsnotify.v1 v1.4.7 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

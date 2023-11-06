@@ -1,4 +1,4 @@
-module github.com/ClusterCockpit/cc-energy-manager
+module main
 
 go 1.21.1
 
