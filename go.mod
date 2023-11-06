@@ -3,10 +3,10 @@ module github.com/ClusterCockpit/cc-energy-manager
 go 1.21.1
 
 require (
-	github.com/ClusterCockpit/cc-metric-collector v0.6.6
+github.com/ClusterCockpit/cc-metric-collector v0.6.6
 	github.com/NVIDIA/go-nvml v0.12.0-1
 	golang.design/x/thread v0.0.0-20210122121316-335e9adffdf1
-)
+	)
 
 require (
 	github.com/ClusterCockpit/go-rocm-smi v0.3.0 // indirect
