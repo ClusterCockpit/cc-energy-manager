@@ -56,6 +56,7 @@ type metricRouter struct {
 	cache       MetricCache         // pointer to MetricCache
 	cachewg     sync.WaitGroup      // wait group for MetricCache
 	maxForward  int                 // number of metrics to forward maximally in one iteration
+	gssData     map[string]GCC      // Data required by the GSS optimizer
 }
 
 // MetricRouter access functions
@@ -301,6 +302,20 @@ func (r *metricRouter) Start() {
 		if r.config.IntervalStamp {
 			p.SetTime(r.timestamp)
 		}
+
+		// selecting the node for metrics collection
+		hostname, ok := p.GetTag("hostname")
+
+		// package up the metric data from the node
+		if ok {
+			if _, ok := r.gssData[hostname]; !ok {
+				r.gssData[hostname] = NewGSS()
+			}
+			if _, ok := r.gssData[hostname]; ok {
+				r.gssData[hostname].Submit(p)
+			}
+		}
+
 		if !r.dropMetric(p) {
 			forward(p)
 		}
