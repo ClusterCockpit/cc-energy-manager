@@ -118,7 +118,7 @@ func ReadJsonFile(filename string) error {
 }
 
 // old function that creates a GSS data structure
-func CreateGSS(x1, x2, x3, x4 int, fx1, fx2, fx3, fx4 float64, mode Mode, limits Limits) GSS {
+/*func CreateGSS(x1, x2, x3, x4 int, fx1, fx2, fx3, fx4 float64, mode Mode, limits Limits) GSS {
 	var golden GSS = GSS{x1, x2, x3, x4, fx1, fx2, fx3, fx4, mode, limits}
 	return golden
 }
@@ -127,7 +127,7 @@ func CreateGSS(x1, x2, x3, x4 int, fx1, fx2, fx3, fx4 float64, mode Mode, limits
 func InitializeGSS(limit Limits) GSS {
 	gss := CreateGSS(0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, NarrowDown, limit)
 }
-
+*/
 
 func CalculateEDP(power float64, time int) float64 {
 	return power * (time * time)
