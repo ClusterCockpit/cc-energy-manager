@@ -186,8 +186,7 @@ func UpdateGSS(gss *GSS, x int, y float64) int {
 
 
 // Calculate the GSS
-func CalculateGSS(gss *GSS, x int, y float64)
-{
+func CalculateGSS(gss *GSS, x int, y float64) {
 	UpdateGSS(gss, x, y)
 }
 
