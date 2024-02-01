@@ -1,0 +1,350 @@
+package optimizer
+
+import (
+	"math"
+	"strings"
+	"encoding/json"
+    "fmt"
+    "os"
+	"io/ioutil"
+)
+
+// the golden ratio variable the will be used in calculating the GSS
+var GOLDEN_RATIO float64 = (math.Sqrt(5) + 1) / 2
+
+// the mode variable that corresponds narrow & broader options
+type Mode int
+
+// enums used to choose the optimizing strategy
+const (
+	NarrowDown Mode = iota
+	BroadenUp
+	BroadenDown
+)
+
+// datastructure used in the GSS datastructure
+type Limits struct {
+	min, max, idle, step int
+}
+
+// the data structure for the node metrics
+type GssConfig struct {
+    MatchMetrics []string 	`json:"match_metrics"`
+	power	float64			`json:"power"`
+}
+
+// GSS Struct that takes the parameters from ther JSON file transmitted by the node controller
+type GSS struct {
+	tuning_lower_outer_border		int 		`json:"tuning_lower_outer_border"`
+	tuning_lower_inner_border		int			`json:"tuning_lower_inner_border"`
+	tuning_upper_inner_border		int			`json:"tuning_upper_inner_border"`
+	tuning_upper_outer_border    	int			`json:"tuning_upper_outer_border"`
+	metric_lower_outer_border		float64		`json:"metric_lower_outer_border"`
+	metric_lower_inner_border		float64		`json:"metric_lower_inner_border"`
+	metric_upper_inner_border		float64		`json:"metric_upper_inner_border"`
+	metric_upper_outer_border		float64		`json:"metric_upper_outer_border"`
+	mode    Mode 		`json:"mode"`
+	limits  Limits		`json:"limits"`
+}
+
+// Output structure that will be transmitted in JSON format
+type GSS_Output_Store struct {
+	gss_value			GSS `json:"gss_value"`
+	gss_input			GSSConfig `json:"gss_input"`
+	edp  				float64 `json:"edp"`
+	node 				int `json:"node"`
+	power 				float64 `json:"power"`
+	//previous_power 		float64	`json:"previous_power"`
+	time 				int64	`json:"time"`
+	//previous_time 		int64	`json:"previous_time"`
+}
+
+// interface for the GSS functions in the optimzer
+type GoldenSectionSearch interface {
+	(g *gss) InitGss(config json.RawMessage) error
+	(g *gss) Submit(m lp.CCMetric) (lp.CCMetric, error)
+	CalculateEDP(power float64, time int) float64 
+	ReadJsonFile(filename string) error
+	WriteJsonFile(gss *GSS, edp float64, gss_config *GssConfig, gss_output *GSS_Output_Store) error
+}
+
+// initialize the GSS data structure from the json file
+func (g *gss) InitGss(config json.RawMessage) error {
+	var err = error
+
+	if(len(config) > 0){
+		err = json.Unmarshal(config, &g.config)
+		if(err !=nil){
+			return err
+		}
+	}
+
+    //read config from json
+    
+    g.matchMetrics = map[string]bool
+    for _, m := range  g.config.MatchMetrics {
+        g.matchMetrics[m] = true
+    }
+}
+
+// 
+func (g *gss) Submit(m lp.CCMetric) (lp.CCMetric, error) {
+    
+	// using the comma OK feature as Go doesn't have try-catch checking that a key-value item exists in a map datastructure
+    if _, ok := g.matchMetrics[m.Name()]; ok {
+        // this is a metric we want
+        
+        v, ok := m.GetField("value")
+        if ok {
+            // v is in float64, access with v.(float64)
+        }
+    }
+    
+    
+    resp, err := lp.New("gss", map[string]string{
+        "hostname":  
+    }, map[string]string{}, map[string]interface{}{
+        "value": "changed freq to x.y because reason z"
+    }, time.Now())
+    return resp, err
+}
+
+// reading the JSON file
+func ReadJsonFile(filename string) error {
+	
+    err := checkFile(filename)
+    if err != nil {
+        logrus.Error(err)
+    }
+
+    file, err := ioutil.ReadFile(filename)
+    if err != nil {
+        logrus.Error(err)
+    }
+}
+
+// calculate the energy delay product for the node if runtime isn't provided
+/*
+func CalculateNodeEDP(power float64, time int) float64 {
+	runtime = time - previous_time
+	power_tmp = power - previous_power
+	edp = tmp_power * (run_time * run_time)
+	previous_power = power
+	previous_time = time
+	return edp
+}
+*/
+
+func CalculateNodeEDP(power float64, runtime int) float64 {
+	edp = power * (runtime * runtime)
+	return edp
+}
+
+// dummy function the actual limits are found in the config for
+// the optimizing parameter. For example, power limit, frequency etc
+func InitializeLimits() Limits {
+	limit := CreateLimits(0, 0, 0, 0)
+	return limit
+}
+
+func CreateLimits(min, max, idle, step int) Limits {
+	var lim Limits = Limits{min, max, idle, step}
+	return lim
+}
+
+// Output GSS initial values
+func WriteJsonFile(gss *GSS, edp float64, gss_config *GssConfig, gss_output *GSS_Output_Store) error {
+		var err = error
+		*gss_output.gss_value = *gss
+		*gss_output.gss_input = *gss_config
+		*gss_output.edp = edp
+
+		err := json.Marshal(*gss_output)
+		
+		if(err !=nil){
+			return err
+		}
+}
+
+func UpdateBorders(gss *GSS, x int, fx float64) {
+	if *gss.tuning_lower_outer_border == x {
+		*gss.metric_lower_outer_border = fx
+	} else if *gss.tuning_lower_inner_border == x {
+		*gss.metric_lower_inner_border = fx
+	} else if *gss.tuning_upper_inner_border == x {
+		*gss.metric_upper_inner_border = fx
+	} else if gss.tuning_upper_outer_border == x {
+		*gss.metric_upper_outer_border = fx
+	}
+}
+
+func UpdateGSS(gss *GSS, x int, y float64) int {
+
+	UpdateBorders(gss, x, y)
+
+	if *gss.mode == NarrowDown {
+		return NarrowDownGSS(gss)
+	} else if *gss.mode == BroadenDown {
+		return BroadenDownGSS(gss)
+	} else {
+		return BroadenUpGSS(gss)
+	}
+}
+
+
+// Calculate the GSS
+func CalculateGSS(gss *GSS, x int, y float64) {
+	UpdateGSS(gss, x, y)
+}
+
+
+func SetLimits(gss GSS, min, max, idle, steps int) {
+	gss.limits.idle = idle
+	gss.limits.step = steps
+	gss.limits.max = max
+	gss.limits.min = min
+}
+
+func NarrowDownGSS(gss *GSS) int {
+	// initializstion
+	if *gss.metric_lower_inner_border == 0 {
+		return *gss.tuning_lower_inner_border
+	}
+	if *gss.metric_upper_inner_border == 0 {
+		return *gss.tuning_upper_inner_border
+	}
+
+	// Calculate ratio (after shifting borders)
+	var b int = int( float64( (*gss.tuning_upper_outer_border) - (*gss.tuning_lower_inner_border) ) / GOLDEN_RATIO)
+	var new_c int = int((GOLDEN_RATIO - 1) * float64( (*gss.tuning_upper_inner_border) -(*gss.tuning_lower_inner_border) ))
+	// limits = gss._limits[gss.mode] set limits and pass down
+
+	if *gss.metric_upper_inner_border < *gss.metric_lower_inner_border && new_c >= *gss.limits.step {
+		// Search higher
+		*gss.tuning_lower_outer_border = *gss.tuning_lower_inner_border
+		*gss.metric_lower_outer_border = *gss.metric_lower_inner_border
+		*gss.tuning_lower_inner_border = *gss.tuning_upper_inner_border
+		*gss.metric_lower_inner_border = *gss.metric_upper_inner_border
+		*gss.tuning_upper_inner_border = *gss.tuning_lower_outer_border + b
+		return *gss.tuning_upper_inner_border
+	} else if *gss.metric_lower_inner_border <= *gss.metric_upper_inner_border && new_c >= *gss.limits.step {
+		// Search lower
+		*gss.tuning_upper_outer_border = *gss.tuning_upper_inner_border
+		*gss.metric_upper_outer_border = *gss.metric_upper_inner_border
+		*gss.tuning_upper_inner_border = *gss.tuning_lower_inner_border
+		*gss.metric_upper_inner_border = *gss.metric_lower_inner_border
+		*gss.tuning_lower_inner_border = *gss.tuning_upper_outer_border - b
+		return *gss.tuning_lower_inner_border
+	} else {
+		// Terminate narrow-down if step is too small
+		*gss.tuning_upper_outer_border = *gss.tuning_upper_inner_border + new_c
+		*gss.metric_upper_outer_border = 0.0
+		*gss.tuning_lower_outer_border = *gss.tuning_lower_inner_border - new_c
+		*gss.metric_lower_outer_border = 0.0
+		if *gss.mode == BroadenUp {
+			*gss.mode = BroadenDown
+			return *gss.tuning_lower_outer_border
+		} else {
+			*gss.mode = BroadenUp
+			return *gss.tuning_upper_outer_border
+		}
+	}
+}
+
+func BroadenUpGSS(gss *GSS) int {
+	// Calculate ratio (after shifting borders)
+	var a int = int((GOLDEN_RATIO - 1) * float64(gss.tuning_upper_inner_border-gss.tuning_lower_inner_border))
+	var b int = int((GOLDEN_RATIO) * float64(gss.tuning_upper_outer_border-gss.tuning_upper_inner_border))
+	//	limits =
+
+	if *gss.metric_upper_outer_border < *gss.metric_upper_inner_border && float64(*gss.tuning_upper_outer_border)+(GOLDEN_RATIO+1)*float64(b) <= float64(*gss.limits.max) {
+		// Search higher
+		*gss.tuning_upper_inner_border = *gss.tuning_upper_outer_border
+		*gss.metric_upper_inner_border = *gss.metric_upper_outer_border
+		*gss.tuning_upper_outer_border = *gss.tuning_upper_inner_border + a
+		return *gss.tuning_upper_outer_border
+	} else if *gss.metric_upper_outer_border < *gss.metric_upper_inner_border && b-( (*gss.tuning_upper_outer_border) - (*gss.tuning_upper_inner_border) ) >= *gss.limits.step {
+		// Nearing limits -> reset exponential growth
+		*gss.tuning_lower_inner_border = *gss.tuning_upper_inner_border
+		*gss.metric_lower_inner_border = *gss.metric_upper_inner_border
+		*gss.tuning_upper_inner_border = *gss.tuning_upper_outer_border
+		*gss.metric_upper_inner_border = *gss.metric_upper_outer_border
+		*gss.tuning_lower_outer_border = *gss.tuning_upper_inner_border - b
+		*gss.metric_lower_outer_border = 0.0
+		*gss.tuning_upper_outer_border = *gss.tuning_lower_inner_border + b
+		return *gss.tuning_upper_outer_border
+	} else if *gss.metric_upper_inner_border <= *gss.metric_upper_outer_border && float64( (*gss.tuning_upper_outer_border) - (*gss.tuning_upper_inner_border) )/(GOLDEN_RATIO+1) >= float64(*gss.limits.step) {
+		// Moved past sweetspot -> narrow-down (optimized)
+		a = int((GOLDEN_RATIO - 1) * float64( (*gss.tuning_upper_outer_border) - (*gss.tuning_upper_inner_border) ))
+		*gss.tuning_lower_inner_border = *gss.tuning_upper_inner_border
+		*gss.metric_lower_inner_border = *gss.metric_upper_inner_border
+		*gss.tuning_upper_inner_border = *gss.tuning_upper_outer_border - a
+		SwitchToNarrowDown(gss)
+		return *gss.tuning_upper_inner_border
+	} else {
+		// Moved past sweetspot or hitting step size
+		if ( (*gss.tuning_upper_outer_border) - (*gss.tuning_upper_inner_border) ) > *gss.limits.step {
+			// Move lower border up, if step size allows it
+			// This speeds up the narrow-down
+			*gss.tuning_lower_inner_border = *gss.tuning_upper_inner_border
+			*gss.metric_lower_inner_border = *gss.metric_upper_inner_border
+			*gss.tuning_upper_inner_border = *gss.tuning_upper_outer_border
+			*gss.metric_upper_inner_border = *gss.metric_upper_outer_border
+		}
+		SwitchToNarrowDown(gss)
+		return *gss.tuning_lower_inner_border
+	}
+}
+
+func BroadenDownGSS(gss *GSS) int {
+	// Calculate ratio (after shifting borders)
+	var a int = int((GOLDEN_RATIO - 1) * float64( (*gss.tuning_upper_inner_border) - (*gss.tuning_lower_inner_border) ))
+	var b int = int((GOLDEN_RATIO) * float64( (*gss.tuning_lower_inner_border) - (*gss.tuning_lower_outer_border) ))
+	//	limits = self._limits[gss.mode]
+	if *gss.metric_lower_outer_border < *gss.metric_lower_inner_border && *gss.tuning_lower_outer_border-int(GOLDEN_RATIO+1)*b >= *gss.limits.min {
+		// Search lower
+		*gss.tuning_lower_inner_border = *gss.tuning_lower_outer_border
+		*gss.metric_lower_inner_border = *gss.metric_lower_outer_border
+		*gss.tuning_lower_outer_border = *gss.tuning_lower_inner_border - a
+		return *gss.tuning_lower_outer_border
+	} else if *gss.metric_lower_outer_border < *gss.metric_lower_inner_border && b-( (*gss.tuning_lower_inner_border) - (*gss.tuning_lower_outer_border) ) >= *gss.limits.step {
+		// Out-of-limits -> reset exponential growth
+		*gss.tuning_upper_inner_border = *gss.tuning_lower_inner_border
+		*gss.metric_upper_inner_border = *gss.metric_lower_inner_border
+		*gss.tuning_lower_inner_border = *gss.tuning_lower_outer_border
+		*gss.metric_lower_inner_border = *gss.metric_lower_outer_border
+		*gss.tuning_upper_outer_border = *gss.tuning_lower_inner_border + b
+		*gss.metric_upper_outer_border = 0.0
+		*gss.tuning_lower_outer_border = *gss.tuning_upper_inner_border - b
+		return *gss.tuning_lower_outer_border
+	} else if *gss.metric_lower_inner_border <= *gss.metric_lower_outer_border && float64( (*gss.tuning_lower_inner_border) - (*gss.tuning_lower_outer_border) )/(GOLDEN_RATIO+1) >= float64(*gss.limits.step) {
+		// Moved past sweetspot -> narrow-down (optimized)
+		a = int((GOLDEN_RATIO - 1) * float64( (*gss.tuning_lower_inner_border) - (*gss.tuning_lower_outer_border) ))
+		*gss.tuning_upper_inner_border = *gss.tuning_lower_inner_border
+		*gss.metric_upper_inner_border = *gss.metric_lower_inner_border
+		*gss.tuning_lower_inner_border = *gss.tuning_lower_outer_border + a
+		SwitchToNarrowDown(gss)
+		return *gss.tuning_lower_inner_border
+	} else {
+		// Moved past sweetspot or hitting step size
+		if (*gss.tuning_lower_inner_border) - (*gss.tuning_lower_outer_border) > *gss.limits.step {
+			// Move upper border down, if step size allows it
+			// This speeds up the narrow-down
+			*gss.tuning_upper_inner_border = *gss.tuning_lower_inner_border
+			*gss.metric_upper_inner_border = *gss.metric_lower_inner_border
+			*gss.tuning_lower_inner_border = *gss.tuning_lower_outer_border
+			*gss.metric_lower_inner_border = *gss.metric_lower_outer_border
+		}
+		SwitchToNarrowDown(gss)
+		return *gss.tuning_upper_inner_border
+	}
+}
+
+func SwitchToNarrowDown(gss *GSS) {
+	gss.mode = NarrowDown
+	var a int = int(float64( (*gss.tuning_upper_inner_border) - (*gss.tuning_lower_inner_border) ) * GOLDEN_RATIO)
+	*gss.tuning_lower_outer_border = *gss.tuning_lower_inner_border - a
+	*gss.metric_lower_outer_border = 0.0
+	*gss.tuning_upper_outer_border = *gss.tuning_upper_inner_border + a
+	*gss.metric_upper_outer_border = 0.0
+}
