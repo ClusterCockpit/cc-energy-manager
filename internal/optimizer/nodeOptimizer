@@ -52,6 +52,7 @@ type GSS_Output_Store struct {
 	gss_value			GSS `json:"gss_value"`
 	gss_input			GSSConfig `json:"gss_input"`
 	edp  				float64 `json:"edp"`
+	ed2p  				float64 `json:"ed2p"`
 	node 				int `json:"node"`
 	power 				float64 `json:"power"`
 	//previous_power 		float64	`json:"previous_power"`
@@ -64,6 +65,7 @@ type GoldenSectionSearch interface {
 	(g *gss) InitGss(config json.RawMessage) error
 	(g *gss) Submit(m lp.CCMetric) (lp.CCMetric, error)
 	CalculateEDP(power float64, time int) float64 
+	CalculateED2P(non_cpu_power float64, all_socket_power float64, retired_instructions int) float64
 	ReadJsonFile(filename string) error
 	WriteJsonFile(gss *GSS, edp float64, gss_config *GssConfig, gss_output *GSS_Output_Store) error
 }
@@ -136,8 +138,14 @@ func CalculateNodeEDP(power float64, time int) float64 {
 */
 
 func CalculateNodeEDP(power float64, runtime int) float64 {
-	edp = power * (runtime * runtime)
+	edp := power * (runtime * runtime)
 	return edp
+}
+// (non-CPU power + RAPL power of all sockets) / retired instructions^2
+// calculate ED2P
+func CalculateED2P(non_cpu_power float64, all_socket_power float64, retired_instructions int) float64 {
+	ed2p := (non_cpu_power + all_socket_power) / (retired_instructions * retired_instructions)
+	return ed2p
 }
 
 // dummy function the actual limits are found in the config for
@@ -153,11 +161,12 @@ func CreateLimits(min, max, idle, step int) Limits {
 }
 
 // Output GSS initial values
-func WriteJsonFile(gss *GSS, edp float64, gss_config *GssConfig, gss_output *GSS_Output_Store) error {
+func WriteJsonFile(gss *GSS, edp float64, ed2p float64, gss_config *GssConfig, gss_output *GSS_Output_Store) error {
 		var err = error
 		*gss_output.gss_value = *gss
 		*gss_output.gss_input = *gss_config
 		*gss_output.edp = edp
+		*gss_output.ed2p = ed2p
 
 		err := json.Marshal(*gss_output)
 		
