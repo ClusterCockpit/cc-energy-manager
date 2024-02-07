@@ -13,23 +13,17 @@ import (
 	"io/ioutil"
 )
 
-
-
-
-
-
 // a datastructure to store the nodes power variable
 type Node_Power_Time struct {
 	node int
 	power float64
-	previous_power float64
-	time int64
-	previous_time int64
+	run_timetime int64
 	edp float64
+	ed2p float64
 }
 
-func CreateNodePowerTime (node int, power float64, previous_power float64, time int64, previos_time int64, edp float64) Node_Power_Time {
-	tmp := Node_Power_Time{node, power, previous_power, time, previos_time, edp}
+func CreateNodePowerTime (node int, power float64, runtime int64, edp float64, ed2p float64) Node_Power_Time {
+	tmp := Node_Power_Time{node, power, runtime, edp, ed2p}
 	return tmp
 }
 
@@ -37,7 +31,7 @@ func CreateNodePowerTime (node int, power float64, previous_power float64, time 
 NodeMap := make(map[int] Node_Power_Time)
 
 // add a node to the map datastructure, if the node exists update the data
-func AddToMap(npt Node_Power_Time node_id int){
+func AddToMap(npt Node_Power_Time, node_id int){
 	NodeMap[node_id] = npt
 }
 
@@ -59,7 +53,7 @@ func FindNodeData(node_id int) Node_Power_Time {
 
 // sum up edp from all the nodes for a specific job
 func SumUpEDP() float64 {
-	var total_edp float64
+	var total_edp float64 = 0.0
 
 	for _, Node_Power_Time := NodeMap {
 		total_edp += Node_Power_Time.edp
@@ -67,34 +61,67 @@ func SumUpEDP() float64 {
 	return total_edp
 }
 
+// sum up ed2p from all the nodes for a specific job
+func SumUpED2P() float64 {
+	var total_ed2p float64 = 0.0
 
-
-
-
-
-
-
-
-// old function that creates a GSS data structure
-/*func CreateGSS(tuning_lower_outer_border, tuning_lower_inner_border, tuning_upper_inner_border, tuning_upper_outer_border int, metric_lower_outer_border, metric_lower_inner_border, metric_upper_inner_border, metric_upper_outer_border float64, mode Mode, limits Limits) GSS {
-	var golden GSS = GSS{tuning_lower_outer_border, tuning_lower_inner_border, tuning_upper_inner_border, tuning_upper_outer_border, metric_lower_outer_border, metric_lower_inner_border, metric_upper_inner_border, metric_upper_outer_border, mode, limits}
-	return golden
+	for _, Node_Power_Time := NodeMap {
+		total_ed2p += Node_Power_Time.ed2p
+	}
+	return total_ed2p
 }
 
-// old function that generates a new GSS object whose parameters are initialized to zero
-func InitializeGSS(limit Limits) GSS {
-	gss := CreateGSS(0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, NarrowDown, limit)
+// sum up ed2p from all the nodes for a specific job
+func SumUpEDPED2P() (float64, float64) {
+	var total_edp float64 = 0.0
+	var total_ed2p float64 = 0.0
+
+	for _, Node_Power_Time := NodeMap {
+		total_edp += Node_Power_Time.edp
+		total_ed2p += Node_Power_Time.ed2p
+	}
+	return total_ed2p
 }
-*/
+
 // calculate the EDP for all the nodes in the job
-func CalculateTotalEDP() float64 {
-	total_edp float64 = 0.0
-	// Iterating map using for range loop
-    for id, npt := range Node_Power_Time {
-        fmt.Println(id, npt)
+func CalculateTotalJobEDP(job_arr []int) float64 {
+	var total_edp float64 = 0.0
+	var node_id int = 0
+	// Iterating through the nodes in the job and extracting the edp value from thev map
+	for _, node_id := range job_arr {
+		npt := FindNodeData(node_id)
 		total_edp += npt.edp
-		fmt.Println(total_edp)
-    }
+		fmt.println(total_edp)
+	  }
+
 	return total_edp
 }
 
+// calculate the both the EDP and ED2P for all the nodes in the job
+func CalculateTotalJobED2P(job_arr []int) float64 {
+	var total_ed2p float64 = 0.0
+	// Iterating through the nodes in the job and extracting the edp2 value from thev map
+	for i, node_id := range job_arr {
+		npt := FindNodeData(node_id)
+		total_ed2p += npt.ed2p
+		fmt.println(total_ed2p)
+	  }
+
+	return total_edp, total_ed2p
+}
+
+// calculate the EDP for all the nodes in the job
+func CalculateTotalJobEDPED2P(job_arr []int) (float64, float64) {
+	var total_edp float64 = 0.0
+	var total_ed2p float64 = 0.0
+	// Iterating through the nodes in the job and extracting the edp value from thev map
+	for _, node_id := range job_arr {
+		npt := FindNodeData(node_id)
+		total_edp += npt.edp
+		total_ed2p += npt.ed2p
+		fmt.println(total_edp)
+		fmt.println(total_ed2p)
+	  }
+
+	return total_edp
+}
