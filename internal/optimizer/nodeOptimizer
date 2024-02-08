@@ -137,14 +137,18 @@ func CalculateNodeEDP(power float64, time int) float64 {
 }
 */
 
+// need to add version using retired instructions used official formula
 func CalculateNodeEDP(power float64, runtime int) float64 {
 	edp := power * (runtime * runtime)
 	return edp
 }
+
 // (non-CPU power + RAPL power of all sockets) / retired instructions^2
 // calculate ED2P
-func CalculateED2P(non_cpu_power float64, all_socket_power float64, retired_instructions int) float64 {
-	ed2p := (non_cpu_power + all_socket_power) / (retired_instructions * retired_instructions)
+// TODO: what exactly is this formula is it internally defined should it be ED2P?
+// TODO: check power * (runtime^3)
+func CalculateED2P(non_cpu_power_estimate float64, all_socket_power float64, retired_instructions int) float64 {
+	ed2p := (non_cpu_power_estimate + all_socket_power) / (retired_instructions * retired_instructions)
 	return ed2p
 }
 
@@ -187,6 +191,8 @@ func UpdateBorders(gss *GSS, x int, fx float64) {
 	}
 }
 
+
+
 func UpdateGSS(gss *GSS, x int, y float64) int {
 
 	UpdateBorders(gss, x, y)
@@ -200,8 +206,8 @@ func UpdateGSS(gss *GSS, x int, y float64) int {
 	}
 }
 
-
 // Calculate the GSS
+// TODO: probably redundant need to check
 func CalculateGSS(gss *GSS, x int, y float64) {
 	UpdateGSS(gss, x, y)
 }
@@ -357,3 +363,10 @@ func SwitchToNarrowDown(gss *GSS) {
 	*gss.tuning_upper_outer_border = *gss.tuning_upper_inner_border + a
 	*gss.metric_upper_outer_border = 0.0
 }
+
+
+// TODO: verify that LIKWID successfully modifies the settings
+// TODO: if the state is optimized should we send data to change the hardware, will depend on frequency of data transfer
+// TODO: What creates the least overhead and who is responsible for setting need to talk with Thomas & Jan about the design
+// TODO: Do we need keep state and who does it (current node optimizer is stateless)
+// TODO: Collect data in the optimizer for validation and reporting

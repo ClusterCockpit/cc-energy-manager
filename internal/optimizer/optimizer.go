@@ -52,6 +52,7 @@ func FindNodeData(node_id int) Node_Power_Time {
 }
 
 // sum up edp from all the nodes for a specific job
+// TODO: change the name to include all nodes
 func SumUpEDP() float64 {
 	var total_edp float64 = 0.0
 
@@ -80,7 +81,7 @@ func SumUpEDPED2P() (float64, float64) {
 		total_edp += Node_Power_Time.edp
 		total_ed2p += Node_Power_Time.ed2p
 	}
-	return total_ed2p
+	return total_edp, total_ed2p
 }
 
 // calculate the EDP for all the nodes in the job
@@ -98,6 +99,7 @@ func CalculateTotalJobEDP(job_arr []int) float64 {
 }
 
 // calculate the both the EDP and ED2P for all the nodes in the job
+// TODO: record data for an audit report
 func CalculateTotalJobED2P(job_arr []int) float64 {
 	var total_ed2p float64 = 0.0
 	// Iterating through the nodes in the job and extracting the edp2 value from thev map
@@ -107,7 +109,7 @@ func CalculateTotalJobED2P(job_arr []int) float64 {
 		fmt.println(total_ed2p)
 	  }
 
-	return total_edp, total_ed2p
+	return total_ed2p
 }
 
 // calculate the EDP for all the nodes in the job
@@ -123,5 +125,8 @@ func CalculateTotalJobEDPED2P(job_arr []int) (float64, float64) {
 		fmt.println(total_ed2p)
 	  }
 
-	return total_edp
+	return total_edp, total_ed2p
 }
+
+// TODO: analysis node behaviour over time and record the information
+// TODO: look at nodes over time and update the fudge factor based on the updated data
