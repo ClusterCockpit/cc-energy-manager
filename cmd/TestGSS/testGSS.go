@@ -111,7 +111,10 @@ func main() {
 
 	// update boarders
 	fmt.Println("update the GSS boarders")
-	UpdateGSS(g, powercap, edp)
+	// calculate the powercap and send it to the node
+	// this needs to be in a loop
+	// the first values calculated are thrown away
+	powercap = UpdateGSS(g, powercap, edp)
 
 	fmt.Println("Print update GSS datastructure")
 	g.PrintGSSValues()
@@ -124,7 +127,6 @@ func (gss *GSS) InitGSS() {
         gss.tuning_upper_inner_border = 189442
         gss.tuning_upper_outer_border = 220000 
         gss.metric_lower_outer_border = 0
-        gss.metric_lower_inner_border = 0
         gss.metric_lower_inner_border = 0
         gss.metric_upper_inner_border = 0
         gss.metric_upper_outer_border = 0
@@ -171,8 +173,8 @@ func CreateLimits(min, max, idle, step int) Limits {
 	return lim
 }
 
-func (gss *GSS) UpdateBorders(powercap int, edp float64) {
-	fmt.Println("Entering UpdateBorders")
+func (gss *GSS) UpdateBordersReturnValue(powercap int, edp float64) {
+	fmt.Println("Entering UpdateBordersReturnValue")
 	fmt.Println("powercap is ", powercap, " and edp is ", edp)
 	if gss.tuning_lower_outer_border == powercap {
 		gss.metric_lower_outer_border = edp
@@ -196,11 +198,11 @@ func (gss *GSS) UpdateBorders(powercap int, edp float64) {
 }
 
 
-// calculates powercap to be sent to the node
+// calculates and returns the powercap to be sent to the node
 func UpdateGSS(gss *GSS, powercap int, edp float64) int {
 	fmt.Printf("Entering Update GSS\n")
 	fmt.Println("powercap is ", powercap ," and edp is ", edp, "\n")
-	gss.UpdateBorders(powercap, edp)
+	gss.UpdateBordersReturnValue(powercap, edp)
 
 	if gss.mode == NarrowDown {
 		return NarrowDownGSS(gss)
