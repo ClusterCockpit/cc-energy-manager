@@ -14,7 +14,7 @@ func NewGetControl(name string,
 	meta map[string]string,
 	tm time.Time,
 ) (CCControl, error) {
-	m, err := NewMessage(name, tags, meta, map[string]interface{}{"value": ""}, tm)
+	m, err := NewMessage(name, tags, meta, map[string]interface{}{"control": ""}, tm)
 	if err == nil {
 		m.AddTag("method", "GET")
 	}
@@ -27,7 +27,7 @@ func NewPutControl(name string,
 	value string,
 	tm time.Time,
 ) (CCControl, error) {
-	m, err := NewMessage(name, tags, meta, map[string]interface{}{"value": value}, tm)
+	m, err := NewMessage(name, tags, meta, map[string]interface{}{"control": value}, tm)
 	if err == nil {
 		m.AddTag("method", "PUT")
 	}
@@ -35,7 +35,7 @@ func NewPutControl(name string,
 }
 
 func IsControl(m CCControl) bool {
-	if v, ok := m.GetField("value"); ok {
+	if v, ok := m.GetField("control"); ok {
 		if me, ok := m.GetTag("method"); ok {
 			if reflect.TypeOf(v) == reflect.TypeOf("string") && (me == "PUT" || me == "GET") {
 				return true
@@ -51,7 +51,7 @@ func IsControlMessage(m CCMessage) bool {
 
 func GetControlValue(m CCControl) string {
 	if IsControl(m) {
-		if v, ok := m.GetField("value"); ok {
+		if v, ok := m.GetField("control"); ok {
 			return v.(string)
 		}
 	}

@@ -12,18 +12,16 @@ type CCEvent interface {
 func NewEvent(name string,
 	tags map[string]string,
 	meta map[string]string,
-	value string,
+	event string,
 	tm time.Time,
 ) (CCEvent, error) {
-	return NewMessage(name, tags, meta, map[string]interface{}{"value": value}, tm)
+	return NewMessage(name, tags, meta, map[string]interface{}{"event": event}, tm)
 }
 
 func IsEvent(m CCEvent) bool {
-	if v, ok := m.GetField("value"); ok {
-		if _, ok := m.GetTag("method"); !ok {
-			if reflect.TypeOf(v) == reflect.TypeOf("string") {
-				return true
-			}
+	if v, ok := m.GetField("event"); ok {
+		if reflect.TypeOf(v) == reflect.TypeOf("string") {
+			return true
 		}
 	}
 	return false
@@ -35,7 +33,7 @@ func IsEventMessage(m CCMessage) bool {
 
 func GetEventValue(m CCMetric) string {
 	if IsEvent(m) {
-		if v, ok := m.GetField("value"); ok {
+		if v, ok := m.GetField("event"); ok {
 			return v.(string)
 		}
 	}
