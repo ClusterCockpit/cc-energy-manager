@@ -55,8 +55,8 @@ type ClusterManager interface {
 	AddInput(input chan lp.CCMetric)
 	AddOutput(output chan lp.CCMetric)
 	CheckPowerBudget(cluster string, diff int) bool
-	NewJob(meta ccspecs.CCJob) error
-	CloseJob(meta ccspecs.CCJob) error
+	NewJob(meta ccspecs.BaseJob) error
+	CloseJob(meta ccspecs.BaseJob) error
 	Start()
 	Close()
 }
@@ -127,7 +127,7 @@ func (cm *clusterManager) AddOutput(output chan lp.CCMetric) {
 	cm.output = output
 }
 
-func (cm *clusterManager) CloseJob(meta ccspecs.CCJob) error {
+func (cm *clusterManager) CloseJob(meta ccspecs.BaseJob) error {
 	if len(meta.Cluster) > 0 && meta.JobID > 0 {
 		mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
 		if cluster, ok := cm.clusters[mycluster]; ok {
@@ -162,7 +162,7 @@ func (cm *clusterManager) CloseJob(meta ccspecs.CCJob) error {
 	return errors.New("job metadata does not contain data for cluster and jobid")
 }
 
-func (cm *clusterManager) NewJob(meta ccspecs.CCJob) error {
+func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) error {
 	if len(meta.Cluster) > 0 && meta.JobID > 0 {
 		mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
 		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "New job")
