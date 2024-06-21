@@ -1,0 +1,18 @@
+{
+    "budgets" : {
+        "testcluster-partition": {
+            "max_power_budget": 2000.0
+        }
+    },
+    "optimizer" : {
+        "testcluster-partition" : {
+            "interval": "10s",
+            "limits" : {
+                "min": 120,
+                "max": 240,
+                "idle": 120,
+                "step": 1
+            }
+        }
+    }
+}
