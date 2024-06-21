@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	ccspecs "github.com/ClusterCockpit/cc-energy-manager/pkg/CCSpecs"
+	ccspecs "github.com/ClusterCockpit/cc-backend/pkg/schema"
 	optimizer "github.com/ClusterCockpit/cc-energy-manager/pkg/Optimizer"
 	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
 	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
@@ -15,7 +15,7 @@ import (
 
 type jobSession struct {
 	optimizer optimizer.Optimizer
-	metadata  ccspecs.CCJob
+	metadata  ccspecs.BaseJob
 	input     chan lp.CCMetric
 	output    chan lp.CCMetric
 }

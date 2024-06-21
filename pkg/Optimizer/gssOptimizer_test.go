@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	ccspecs "github.com/ClusterCockpit/cc-energy-manager/pkg/CCSpecs"
+	ccspecs "github.com/ClusterCockpit/cc-backend/pkg/schema"
 	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
 	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
 )
 
 func TestInit(t *testing.T) {
 	var wg sync.WaitGroup
-	var job ccspecs.CCJob
+	var job ccspecs.BaseJob
 	testfile := "testjob.json"
 	testconfig := `{
 		"metrics" : [
@@ -47,7 +47,7 @@ func TestInit(t *testing.T) {
 
 func TestStart(t *testing.T) {
 	var wg sync.WaitGroup
-	var job ccspecs.CCJob
+	var job ccspecs.BaseJob
 	testfile := "testjob.json"
 	testconfig := `{
 		"metrics" : [
@@ -81,7 +81,7 @@ func TestStart(t *testing.T) {
 
 func TestStartInput(t *testing.T) {
 	var wg sync.WaitGroup
-	var job ccspecs.CCJob
+	var job ccspecs.BaseJob
 	testfile := "testjob.json"
 	testconfig := `{
 		"metrics" : [
@@ -141,7 +141,7 @@ func TestStartInput(t *testing.T) {
 
 func TestStartInputRegion(t *testing.T) {
 	var wg sync.WaitGroup
-	var job ccspecs.CCJob
+	var job ccspecs.BaseJob
 	testfile := "testjob.json"
 	regionname := "foobar"
 	testconfig := `{

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	ccspecs "github.com/ClusterCockpit/cc-energy-manager/pkg/CCSpecs"
+	ccspecs "github.com/ClusterCockpit/cc-backend/pkg/schema"
 	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
 	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
 )
@@ -244,7 +244,7 @@ type gssOptimizer struct {
 }
 
 type GssOptimizer interface {
-	Init(ident string, wg *sync.WaitGroup, metadata ccspecs.CCJob, config json.RawMessage) error
+	Init(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob, config json.RawMessage) error
 	AddInput(input chan lp.CCMetric)
 	AddOutput(output chan lp.CCMetric)
 	NewRegion(regionname string)
@@ -260,7 +260,7 @@ func isAcceleratorMetric(metric string) bool {
 	return strings.HasPrefix(metric, "acc_")
 }
 
-func (o *gssOptimizer) Init(ident string, wg *sync.WaitGroup, metadata ccspecs.CCJob, config json.RawMessage) error {
+func (o *gssOptimizer) Init(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob, config json.RawMessage) error {
 	o.ident = fmt.Sprintf("GssOptimizer(%s)", ident)
 	o.wg = wg
 	o.metadata = metadata
@@ -627,7 +627,7 @@ func (os *gssOptimizer) Start() {
 	cclog.ComponentDebug(os.ident, "START")
 }
 
-func NewGssOptimizer(ident string, wg *sync.WaitGroup, metadata ccspecs.CCJob, config json.RawMessage) (GssOptimizer, error) {
+func NewGssOptimizer(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob, config json.RawMessage) (GssOptimizer, error) {
 	o := new(gssOptimizer)
 
 	err := o.Init(ident, wg, metadata, config)

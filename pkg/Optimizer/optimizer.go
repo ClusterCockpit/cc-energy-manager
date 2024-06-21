@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	ccspecs "github.com/ClusterCockpit/cc-energy-manager/pkg/CCSpecs"
+	ccspecs "github.com/ClusterCockpit/cc-backend/pkg/schema"
 	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
 )
 
@@ -20,13 +20,13 @@ type optimizer struct {
 	ident    string
 	input    chan lp.CCMetric
 	output   chan lp.CCMetric
-	metadata ccspecs.CCJob
+	metadata ccspecs.BaseJob
 	ticker   time.Ticker
 	started  bool
 }
 
 type Optimizer interface {
-	Init(ident string, wg *sync.WaitGroup, metadata ccspecs.CCJob, config json.RawMessage) error
+	Init(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob, config json.RawMessage) error
 	AddInput(input chan lp.CCMetric)
 	AddOutput(output chan lp.CCMetric)
 	NewRegion(regionname string)
@@ -46,7 +46,7 @@ func (os *optimizer) AddOutput(output chan lp.CCMetric) {
 // func (o *optimizer) Init(config json.RawMessage) error {
 // 	return nil
 // }
-// func (o *optimizer) Run(metadata *ccspecs.CCJob, data []lp.CCMetric) ([]lp.CCControl, error) {
+// func (o *optimizer) Run(metadata *ccspecs.BaseJob, data []lp.CCMetric) ([]lp.CCControl, error) {
 // 	controls := make([]lp.CCControl, 0)
 // 	return controls, nil
 // }
