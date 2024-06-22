@@ -2,12 +2,15 @@ package ccmessage
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	write "github.com/influxdata/influxdb-client-go/v2/api/write"
-	lp "github.com/influxdata/line-protocol" // MIT license
+	lp1 "github.com/influxdata/line-protocol" // MIT license
+	lp2 "github.com/influxdata/line-protocol/v2/lineprotocol"
 	"golang.org/x/exp/maps"
 )
 
@@ -257,8 +260,18 @@ func FromMessage(other CCMessage) CCMessage {
 	}
 }
 
+func EmptyMessage() CCMessage {
+	return &ccMessage{
+		name:   "",
+		tags:   make(map[string]string),
+		meta:   make(map[string]string),
+		fields: make(map[string]interface{}),
+		tm:     time.Time{},
+	}
+}
+
 // FromInfluxMetric copies the influxDB line protocol metric <other>
-func FromInfluxMetric(other lp.Metric) CCMessage {
+func FromInfluxMetric(other lp1.Metric) CCMessage {
 	m := &ccMessage{
 		name:   other.Name(),
 		tags:   make(map[string]string),
@@ -285,6 +298,127 @@ func FromJSON(input json.RawMessage) (CCMessage, error) {
 	}
 
 	return NewMessage(j.Name, j.Tags, make(map[string]string), j.Fields, j.Tm)
+}
+
+func (m *ccMessage) MarshalJSON() ([]byte, error) {
+	return m.ToJSON(map[string]bool{})
+}
+
+func (m *ccMessage) UnmarshalJSON(data []byte) error {
+	var j ccMessageJSON
+	err := json.Unmarshal(data, &j)
+	if err != nil {
+		return fmt.Errorf("failed to parse JSON to CCMessage: %v", err.Error())
+	}
+	m.name = j.Name
+	m.tm = j.Tm
+	m.meta = make(map[string]string)
+	m.tags = make(map[string]string)
+	for k, v := range j.Tags {
+		m.tags[k] = v
+	}
+	m.fields = make(map[string]interface{})
+	for k, v := range j.Fields {
+		m.fields[k] = v
+	}
+	return nil
+}
+
+func FromBytes(data []byte) ([]CCMessage, error) {
+	out := make([]CCMessage, 0)
+	decoder := lp2.NewDecoderWithBytes(data)
+	for decoder.Next() {
+		// Decode measurement name
+		measurement, err := decoder.Measurement()
+		if err != nil {
+			msg := "ccmessage: Failed to decode measurement: " + err.Error()
+			return nil, errors.New(msg)
+		}
+
+		// Decode tags
+		tags := make(map[string]string)
+		for {
+			key, value, err := decoder.NextTag()
+			if err != nil {
+				msg := "ccmessage: Failed to decode tag: " + err.Error()
+				return nil, errors.New(msg)
+			}
+			if key == nil {
+				break
+			}
+			tags[string(key)] = string(value)
+		}
+
+		// Decode fields
+		fields := make(map[string]interface{})
+		for {
+			key, value, err := decoder.NextField()
+			if err != nil {
+				msg := "ccmessage: Failed to decode field: " + err.Error()
+				return nil, errors.New(msg)
+			}
+			if key == nil {
+				break
+			}
+			fields[string(key)] = value.Interface()
+		}
+
+		// Decode time stamp
+		t, err := decoder.Time(lp2.Nanosecond, time.Time{})
+		if err != nil {
+			msg := "ccmessage: Failed to decode time: " + err.Error()
+			return nil, errors.New(msg)
+		}
+
+		y, err := NewMessage(
+			string(measurement),
+			tags,
+			map[string]string{},
+			fields,
+			t,
+		)
+		if err != nil {
+			msg := "ccmessage: Failed to create CCMessage: " + err.Error()
+			return nil, errors.New(msg)
+		}
+		out = append(out, y)
+	}
+	return out, nil
+}
+
+func (m *ccMessage) Bytes() ([]byte, error) {
+	var encoder lp2.Encoder
+	encoder.SetPrecision(lp2.Nanosecond)
+
+	sortedkeys := make([]string, 0)
+	for k := range m.Tags() {
+		sortedkeys = append(sortedkeys, k)
+	}
+	sort.Strings(sortedkeys)
+
+	encoder.StartLine(m.Name())
+	for _, k := range sortedkeys {
+		v, ok := m.GetTag(k)
+		if !ok {
+			msg := fmt.Sprintf("CCMessage: Failed to get tag for key %s", k)
+			return nil, errors.New(msg)
+		}
+		encoder.AddTag(k, v)
+	}
+	for k, v := range m.Fields() {
+		nv, ok := lp2.NewValue(v)
+		if !ok {
+			msg := fmt.Sprintf("CCMessage: Failed to get field value for key %s", k)
+			return nil, errors.New(msg)
+		}
+		encoder.AddField(k, nv)
+	}
+	encoder.EndLine(m.Time())
+	if err := encoder.Err(); err != nil {
+		msg := fmt.Sprintf("CCMessage: Failed to encode message: %v", err.Error())
+		return nil, errors.New(msg)
+	}
+	return encoder.Bytes(), nil
 }
 
 // convertField converts data types of fields by the following schemata:
