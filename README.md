@@ -2,7 +2,14 @@
 A central energy setting optimization component
 
 ## How to build
-`$ go build ./cmd/cc-energy-manager`
+`$ make`
 
 ## How to run
-`$ ./cc-energy-manager
+`$ ./cc-energy-manager`
+
+Possible options:
+- `-config <configfile>`: Path to main configuration file
+- `-debug`: Activate debugging output
+- `-log <logfile>`: Write output to logfile instead of stdout
+
+
