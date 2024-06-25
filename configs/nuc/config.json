@@ -1,8 +1,0 @@
-{
-    "sinks" : "/home/unrz139/Work/cc-energy-manager/configs/nuc/sinks.json",
-    "receivers": "/home/unrz139/Work/cc-energy-manager/configs/nuc/receivers.json",
-    "router": "/home/unrz139/Work/cc-energy-manager/configs/nuc/router.json",
-    "optimizer" : "/home/unrz139/Work/cc-energy-manager/configs/nuc/optimizer.json",
-    "interval": "10s",
-    "duration": "10s"
-}

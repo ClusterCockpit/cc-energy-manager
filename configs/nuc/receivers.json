@@ -1,8 +1,0 @@
-{
-  "mynats": {
-    "type": "nats",
-    "address" : "localhost",
-    "port" : "4222",
-    "subject" : "nuc"
-  }
-}

@@ -1,6 +1,0 @@
-{
-    "interval": "1m",
-    "metrics": [
-        "mem_used"
-    ]
-}
