@@ -1,0 +1,6 @@
+{
+    "receivers" : "./receivers.json",
+    "sinks": "./sinks.json",
+    "optimizer": "./optimizer.json",
+    "interval": "10s"
+}
