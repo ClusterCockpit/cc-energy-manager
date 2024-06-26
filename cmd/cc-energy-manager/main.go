@@ -45,10 +45,8 @@ import (
 
 type CentralConfigFile struct {
 	Interval            string `json:"interval"`
-	Duration            string `json:"duration"`
 	SinkConfigFile      string `json:"sinks"`
 	ReceiverConfigFile  string `json:"receivers"`
-	RouterConfigFile    string `json:"router"`
 	OptimizerConfigFile string `json:"optimizer"`
 }
 
@@ -66,7 +64,6 @@ func LoadCentralConfiguration(file string, config *CentralConfigFile) error {
 
 type RuntimeConfig struct {
 	Interval   time.Duration
-	Duration   time.Duration
 	CliArgs    map[string]string
 	ConfigFile CentralConfigFile
 
@@ -180,33 +177,12 @@ func mainFunc() int {
 		}
 	}
 
-	// Properly use duration parser with inputs like '60s', '5m' or similar
-	if len(rcfg.ConfigFile.Duration) > 0 {
-		t, err := time.ParseDuration(rcfg.ConfigFile.Duration)
-		if err != nil {
-			cclog.Error("Configuration value 'duration' no valid duration")
-		}
-		rcfg.Duration = t
-		if rcfg.Duration == 0 {
-			cclog.Error("Configuration value 'duration' must be greater than zero")
-			return 1
-		}
-	}
-	if rcfg.Duration > rcfg.Interval {
-		cclog.Error("The interval should be greater than duration")
-		return 1
-	}
-
 	if len(rcfg.ConfigFile.SinkConfigFile) == 0 {
 		cclog.Error("Sink configuration file must be set")
 		return 1
 	}
 	if len(rcfg.ConfigFile.ReceiverConfigFile) == 0 {
 		cclog.Error("Receivers configuration file must be set")
-		return 1
-	}
-	if len(rcfg.ConfigFile.RouterConfigFile) == 0 {
-		cclog.Error("Router configuration file must be set")
 		return 1
 	}
 	if len(rcfg.ConfigFile.OptimizerConfigFile) == 0 {
@@ -232,12 +208,6 @@ func mainFunc() int {
 		cclog.Error(err.Error())
 		return 1
 	}
-
-	// rcfg.Router, err = router.New(nil, &rcfg.Sync, rcfg.ConfigFile.RouterConfigFile)
-	// if err != nil {
-	// 	cclog.Error(err.Error())
-	// 	return 1
-	// }
 
 	rcfg.ClustManager, err = cmanager.NewClusterManager(&rcfg.Sync, rcfg.ConfigFile.OptimizerConfigFile)
 	if err != nil {
