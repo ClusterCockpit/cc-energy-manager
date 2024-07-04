@@ -5,10 +5,13 @@ import (
 //	"strings"
 //	"encoding/json"
     "fmt"
-//    "os"
+    "os"
 //    "time"
 //	"io/ioutil"
 //	"github.com/nats-io/nats.go"
+	"context"
+//	"log"
+	"log/slog"
 )
 
 // the golden ratio variable the will be used in calculating the GSS
@@ -32,8 +35,8 @@ type Limits struct {
 // The structure for data required from the node
 type NodeInputStruct struct {
 	nodeID 			string
-	retiredInstructions 	int64
-	coreEnergy		float64
+	retiredInstructions 	int
+	coreEnergy		int
 }
 
 // The structure for output data to be sent to the node 
@@ -41,6 +44,23 @@ type NodeOutputStruct struct {
 	nodeID			string
 	powerCap		float64
 }
+
+// The structure for logging data
+type GssLogInfo struct {
+	// Job ID associateed with the job submitted by the cluster manager
+	jobID		string 
+	// Node ID associated with the job ID
+	nodeID		string
+	// parameter optimized by the GSS
+	powercap	int
+	// optimizer input data sent from the node
+	nodeData	NodeInputStruct
+	// direction of the data packet flow, 0 is to the node, 1 is to the optimizer
+	direction	bool
+	// was the operation to set the node knob successful, 0 fail, 1 success
+	success		bool
+}
+
 
 // GSS data structure
 type GSS struct {
@@ -103,6 +123,37 @@ func main() {
 	var power_per_socket int = 184
 	var retired_instr int = 69517960495
 	var powercap int = 220000
+
+//	var toNode bool = true
+	var toOptimizer bool = false
+	
+	log := new(GssLogInfo)
+	log.jobID = "job_one"
+	log.nodeID = "node_one"
+	log.powercap = powercap
+	log.nodeData.nodeID = "node_one"
+	log.nodeData.retiredInstructions = retired_instr
+	log.nodeData.coreEnergy = power_per_socket
+	log.direction = toOptimizer
+	log.success = false
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))	
+
+	logger.LogAttrs(
+  			context.Background(),
+  			slog.LevelInfo,
+  			"Optimizer Info",
+  			slog.String("JobID", log.jobID),
+			slog.String("NodeID", log.nodeID),
+  			slog.Group("properties",
+    			slog.Int("powercap", log.powercap),
+    			slog.Int("retired instructions", log.nodeData.retiredInstructions),
+    			slog.Int("socket energy", log.nodeData.coreEnergy),
+			slog.Bool("direction", log.direction),
+			slog.Bool("success", log.success),),
+			)
+
+
 
         fmt.Println("Before calling the function CalculateEDP")
         // call the function CalculateEDP
