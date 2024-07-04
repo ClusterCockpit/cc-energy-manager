@@ -34,11 +34,12 @@ import (
 	cmanager "github.com/ClusterCockpit/cc-energy-manager/pkg/ClusterManager"
 	"github.com/ClusterCockpit/cc-metric-collector/receivers"
 	"github.com/ClusterCockpit/cc-metric-collector/sinks"
-
 	//	"strings"
 	"sync"
 	"time"
 
+	// DB added
+	opt "github.com/ClusterCockpit/cc-energy-manager/pkg/Optimizer"
 	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
 	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
 )
@@ -71,6 +72,8 @@ type RuntimeConfig struct {
 	ReceiveManager receivers.ReceiveManager
 	// Router         router.MetricRouter
 	ClustManager cmanager.ClusterManager
+	//DB
+	Optimizer	opt.Optimizer
 
 	Channels []chan lp.CCMetric
 	Sync     sync.WaitGroup
@@ -153,6 +156,8 @@ func mainFunc() int {
 		SinkManager:    nil,
 		ReceiveManager: nil,
 		// Router:         nil,
+		// DB added an Optimer to rcfg
+		//Optimizer:	nil,
 		ClustManager: nil,
 		CliArgs:      ReadCli(),
 	}
@@ -231,14 +236,17 @@ func mainFunc() int {
 	rcfg.ReceiveManager.AddOutput(ReceiversToRouterChannel)
 	rcfg.ClustManager.AddInput(ReceiversToRouterChannel)
 
-	// rcfg.Optimizer.AddInput(RouterToOptimizerChannel)
-	// rcfg.Optimizer.AddOutput(OptimizerToSinksChannel)
+	// Optimizer
+	rcfg.Optimizer.AddInput(RouterToOptimizerChannel)
+	rcfg.Optimizer.AddOutput(OptimizerToSinksChannel)
 
 	// Start the managers
 	rcfg.SinkManager.Start()
 	rcfg.ReceiveManager.Start()
 	rcfg.ClustManager.Start()
-	// rcfg.Optimizer.Start()
+
+	// Start the Optimizer
+	rcfg.Optimizer.Start()
 
 	// Wait until one tick has passed. This is a workaround
 	if rcfg.CliArgs["once"] == "true" {
