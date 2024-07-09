@@ -34,6 +34,7 @@ import (
 	cmanager "github.com/ClusterCockpit/cc-energy-manager/pkg/ClusterManager"
 	"github.com/ClusterCockpit/cc-metric-collector/receivers"
 	"github.com/ClusterCockpit/cc-metric-collector/sinks"
+
 	//	"strings"
 	"sync"
 	"time"
@@ -73,7 +74,7 @@ type RuntimeConfig struct {
 	// Router         router.MetricRouter
 	ClustManager cmanager.ClusterManager
 	//DB
-	Optimizer	opt.Optimizer
+	Optimizer opt.Optimizer
 
 	Channels []chan lp.CCMetric
 	Sync     sync.WaitGroup
@@ -146,6 +147,10 @@ func shutdownHandler(config *RuntimeConfig, shutdownSignal chan os.Signal) {
 		cclog.Debug("Shutdown ClusterManager...")
 		config.ClustManager.Close()
 	}
+	if config.Optimizer != nil {
+		cclog.Debug("Shutdown Optimizer....")
+		config.Optimizer.Close()
+	}
 }
 
 func mainFunc() int {
@@ -157,7 +162,7 @@ func mainFunc() int {
 		ReceiveManager: nil,
 		// Router:         nil,
 		// DB added an Optimer to rcfg
-		//Optimizer:	nil,
+		Optimizer:    nil,
 		ClustManager: nil,
 		CliArgs:      ReadCli(),
 	}
