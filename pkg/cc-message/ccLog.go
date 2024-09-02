@@ -15,7 +15,7 @@ func NewLog(name string,
 	log string,
 	tm time.Time,
 ) (CCLog, error) {
-	return NewMessage(name, tags, meta, map[string]interface{}{"value": log}, tm)
+	return NewMessage(name, tags, meta, map[string]interface{}{"log": log}, tm)
 }
 
 func IsLog(m CCLog) bool {
