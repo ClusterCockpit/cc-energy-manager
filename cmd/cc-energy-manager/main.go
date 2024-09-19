@@ -241,17 +241,10 @@ func mainFunc() int {
 	rcfg.ReceiveManager.AddOutput(ReceiversToRouterChannel)
 	rcfg.ClustManager.AddInput(ReceiversToRouterChannel)
 
-	// Optimizer
-	rcfg.Optimizer.AddInput(RouterToOptimizerChannel)
-	rcfg.Optimizer.AddOutput(OptimizerToSinksChannel)
-
 	// Start the managers
 	rcfg.SinkManager.Start()
 	rcfg.ReceiveManager.Start()
 	rcfg.ClustManager.Start()
-
-	// Start the Optimizer
-	rcfg.Optimizer.Start()
 
 	// Wait until one tick has passed. This is a workaround
 	if rcfg.CliArgs["once"] == "true" {
