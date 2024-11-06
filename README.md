@@ -92,7 +92,7 @@ Once the execution of the NATS server has been verified to produce and send the 
 
 ## How to build
 
-`$ In the directory containing the test code execute the following command:
+In the directory containing the test code execute the following command:
 ```
 $ go build
 ```
