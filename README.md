@@ -1,8 +1,8 @@
-# cc-energy-manager
+# Standalone test for the node energy optimizer
 A central energy setting optimization component
 
 ## How to build
-`$ go build ./cmd/cc-energy-manager`
+`$ go build
 
 ## How to run
-`$ ./cc-energy-manager
+`$ ./example
