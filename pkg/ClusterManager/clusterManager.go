@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	ccspecs "github.com/ClusterCockpit/cc-backend/pkg/schema"
@@ -167,9 +168,6 @@ func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) error {
 	if len(meta.Cluster) > 0 && meta.JobID > 0 {
 		mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
 		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "New job")
-		if _, ok := cm.clusters[mycluster]; !ok {
-			cm.AddCluster(mycluster)
-		}
 
 		cluster := cm.clusters[mycluster]
 		if osettings, ok := cm.config.Optimizer[mycluster]; ok {
@@ -218,13 +216,37 @@ func (cm *clusterManager) Start() {
 				cclog.ComponentDebug("ClusterManager", "DONE")
 				return
 			case m := <-cm.input:
+				mtype := m.MessageType()
 				if c, ok := m.GetTag("cluster"); ok {
+					if _, ok := cm.clusters[c]; !ok {
+						cm.AddCluster(c)
+					}
+					if mtype == lp.CCMSG_TYPE_METRIC {
 					if h, ok := m.GetTag("hostname"); ok {
 						if p, ok := cm.hosts2partitions[h]; ok {
 							cluster := fmt.Sprintf("%s-%s", c, p)
 							for _, s := range cm.clusters[cluster].hosts2optimizers[h] {
 								if o, ok := cm.clusters[cluster].optimizers[s]; ok {
 									o.input <- m
+									}
+								}
+							}
+						}
+					} else if mtype == lp.CCMSG_TYPE_EVENT {
+						event := lp.CCEvent(m)
+						if event.Name() == cm.config.JobEventName {
+							var jdata ccspecs.BaseJob
+							value := lp.GetEventValue(event)
+							d := json.NewDecoder(strings.NewReader(value))
+							d.DisallowUnknownFields()
+							if err := d.Decode(&jdata); err == nil {
+								if jdata.State == "running" {
+									err = cm.NewJob(jdata)
+								} else {
+									err = cm.CloseJob(jdata)
+								}
+								if err != nil {
+									cclog.ComponentError("ClusterManager", "Failed to process job", jdata.JobID, ":", err.Error())
 								}
 							}
 						}
