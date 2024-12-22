@@ -9,15 +9,15 @@ import (
 
 	ccspecs "github.com/ClusterCockpit/cc-backend/pkg/schema"
 	optimizer "github.com/ClusterCockpit/cc-energy-manager/pkg/Optimizer"
+	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/cc-message"
 	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
-	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
 )
 
 type jobSession struct {
 	optimizer optimizer.Optimizer
 	metadata  ccspecs.BaseJob
-	input     chan lp.CCMetric
-	output    chan lp.CCMetric
+	input     chan lp.CCMessage
+	output    chan lp.CCMessage
 }
 
 type clusterEntry struct {
@@ -34,7 +34,8 @@ type clusterManagerConfig struct {
 		MaxPowerBudget float64 `json:"max_power_budget"`
 		MinPowerBudget float64 `json:"min_power_budget,omitempty"`
 	} `json:"budgets"`
-	Optimizer map[string]json.RawMessage `json:"optimizer"`
+	Optimizer    map[string]json.RawMessage `json:"optimizer"`
+	JobEventName string                     `json:"job_event_name"`
 }
 
 type clusterManager struct {
@@ -42,8 +43,8 @@ type clusterManager struct {
 	done             chan bool
 	wg               *sync.WaitGroup
 	optWg            sync.WaitGroup
-	input            chan lp.CCMetric
-	output           chan lp.CCMetric
+	input            chan lp.CCMessage
+	output           chan lp.CCMessage
 	configFile       string
 	config           clusterManagerConfig
 	hosts2partitions map[string]string
@@ -52,8 +53,8 @@ type clusterManager struct {
 type ClusterManager interface {
 	Init(wg *sync.WaitGroup, configFile string) error
 	AddCluster(cluster string)
-	AddInput(input chan lp.CCMetric)
-	AddOutput(output chan lp.CCMetric)
+	AddInput(input chan lp.CCMessage)
+	AddOutput(output chan lp.CCMessage)
 	CheckPowerBudget(cluster string, diff int) bool
 	NewJob(meta ccspecs.BaseJob) error
 	CloseJob(meta ccspecs.BaseJob) error
@@ -119,11 +120,11 @@ func (cm *clusterManager) AddCluster(cluster string) {
 	}
 }
 
-func (cm *clusterManager) AddInput(input chan lp.CCMetric) {
+func (cm *clusterManager) AddInput(input chan lp.CCMessage) {
 	cm.input = input
 }
 
-func (cm *clusterManager) AddOutput(output chan lp.CCMetric) {
+func (cm *clusterManager) AddOutput(output chan lp.CCMessage) {
 	cm.output = output
 }
 
@@ -182,8 +183,8 @@ func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) error {
 			j := jobSession{
 				optimizer: o,
 				metadata:  meta,
-				input:     make(chan lp.CCMetric),
-				output:    make(chan lp.CCMetric),
+				input:     make(chan lp.CCMessage),
+				output:    make(chan lp.CCMessage),
 			}
 			o.AddInput(j.input)
 			o.AddOutput(j.output)
@@ -218,7 +219,6 @@ func (cm *clusterManager) Start() {
 				return
 			case m := <-cm.input:
 				if c, ok := m.GetTag("cluster"); ok {
-					//cl :=
 					if h, ok := m.GetTag("hostname"); ok {
 						if p, ok := cm.hosts2partitions[h]; ok {
 							cluster := fmt.Sprintf("%s-%s", c, p)
@@ -229,7 +229,6 @@ func (cm *clusterManager) Start() {
 							}
 						}
 					}
-
 				}
 			}
 		}

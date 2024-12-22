@@ -14,6 +14,18 @@ import (
 	"golang.org/x/exp/maps"
 )
 
+type CCMessageType int
+
+const (
+	CCMSG_TYPE_METRIC = iota
+	CCMSG_TYPE_EVENT
+	CCMSG_TYPE_LOG
+	CCMSG_TYPE_CONTROL
+)
+const MIN_CCMSG_TYPE = CCMSG_TYPE_METRIC
+const MAX_CCMSG_TYPE = CCMSG_TYPE_CONTROL
+const CCMSG_TYPE_INVALID = MAX_CCMSG_TYPE + 1
+
 // Most functions are derived from github.com/influxdata/line-protocol/metric.go
 // The metric type is extended with an extra meta information list re-using the Tag
 // type.
@@ -65,6 +77,9 @@ type CCMessage interface {
 	HasField(key string) (ok bool)                    // Check if a field key is present
 	RemoveField(key string)                           // Remove a field addressed by its key
 	String() string                                   // Return line-protocol like string
+
+	MessageType() CCMessageType       // Return message type
+	Validate(hostnameTag string) bool // Validate that it is a valid CCMessage
 }
 
 // String implements the stringer interface for data type ccMessage
@@ -419,6 +434,19 @@ func (m *ccMessage) Bytes() ([]byte, error) {
 		return nil, errors.New(msg)
 	}
 	return encoder.Bytes(), nil
+}
+
+func (m *ccMessage) MessageType() CCMessageType {
+	if m.HasField("value") {
+		return CCMSG_TYPE_METRIC
+	} else if m.HasField("event") {
+		return CCMSG_TYPE_EVENT
+	} else if m.HasField("log") {
+		return CCMSG_TYPE_LOG
+	} else if m.HasField("control") {
+		return CCMSG_TYPE_CONTROL
+	}
+	return CCMSG_TYPE_INVALID
 }
 
 // convertField converts data types of fields by the following schemata:

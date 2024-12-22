@@ -9,8 +9,8 @@ import (
 	"time"
 
 	ccspecs "github.com/ClusterCockpit/cc-backend/pkg/schema"
+	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/cc-message"
 	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
-	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
 )
 
 func TestInit(t *testing.T) {
@@ -117,18 +117,18 @@ func TestStartInput(t *testing.T) {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
 		return
 	}
-	input := make(chan lp.CCMetric)
+	input := make(chan lp.CCMessage)
 	o.AddInput(input)
 	o.Start()
 
 	for i := 0; i < 21; i++ {
 		for c := 0; c < 127; c++ {
-			instr, _ := lp.New("instructions", testtags, testmeta, map[string]interface{}{"value": 1000.0 * float64(i*c+1)}, time.Now())
+			instr, _ := lp.NewMetric("instructions", testtags, testmeta, 1000.0*float64(i*c+1), time.Now())
 			instr.AddTag("type-id", fmt.Sprintf("%d", c))
 			input <- instr
 		}
 		for c := 0; c < 2; c++ {
-			cpu_energy, _ := lp.New("cpu_energy", testtags, testmeta, map[string]interface{}{"value": 500 * float64(i*c+1)}, time.Now())
+			cpu_energy, _ := lp.NewMetric("cpu_energy", testtags, testmeta, 500*float64(i*c+1), time.Now())
 			cpu_energy.AddTag("type", "socket")
 			cpu_energy.AddTag("type-id", fmt.Sprintf("%d", c))
 			input <- cpu_energy
@@ -178,19 +178,19 @@ func TestStartInputRegion(t *testing.T) {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
 		return
 	}
-	input := make(chan lp.CCMetric)
+	input := make(chan lp.CCMessage)
 	o.AddInput(input)
 	o.Start()
 	o.NewRegion(regionname)
 
 	for i := 0; i < 21; i++ {
 		for c := 0; c < 127; c++ {
-			instr, _ := lp.New("instructions", testtags, testmeta, map[string]interface{}{"value": 1000.0 * float64(i*c+1)}, time.Now())
+			instr, _ := lp.NewMetric("instructions", testtags, testmeta, 1000.0*float64(i*c+1), time.Now())
 			instr.AddTag("type-id", fmt.Sprintf("%d", c))
 			input <- instr
 		}
 		for c := 0; c < 2; c++ {
-			cpu_energy, _ := lp.New("cpu_energy", testtags, testmeta, map[string]interface{}{"value": 500 * float64(i*c+1)}, time.Now())
+			cpu_energy, _ := lp.NewMetric("cpu_energy", testtags, testmeta, 500*float64(i*c+1), time.Now())
 			cpu_energy.AddTag("type", "socket")
 			cpu_energy.AddTag("type-id", fmt.Sprintf("%d", c))
 			input <- cpu_energy

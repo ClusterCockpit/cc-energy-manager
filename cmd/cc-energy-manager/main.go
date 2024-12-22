@@ -41,8 +41,8 @@ import (
 
 	// DB added
 	opt "github.com/ClusterCockpit/cc-energy-manager/pkg/Optimizer"
+	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/cc-message"
 	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
-	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
 )
 
 type CentralConfigFile struct {
@@ -232,9 +232,9 @@ func mainFunc() int {
 	rcfg.Sync.Add(1)
 	go shutdownHandler(&rcfg, shutdownSignal)
 
-	RouterToOptimizerChannel := make(chan lp.CCMetric, 200)
-	ReceiversToRouterChannel := make(chan lp.CCMetric, 200)
-	OptimizerToSinksChannel := make(chan lp.CCMetric, 200)
+	RouterToOptimizerChannel := make(chan lp.CCMessage, 200)
+	ReceiversToRouterChannel := make(chan lp.CCMessage, 200)
+	OptimizerToSinksChannel := make(chan lp.CCMessage, 200)
 
 	rcfg.SinkManager.AddInput(OptimizerToSinksChannel)
 	rcfg.ClustManager.AddOutput(RouterToOptimizerChannel)

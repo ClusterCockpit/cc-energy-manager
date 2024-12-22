@@ -10,8 +10,8 @@ import (
 	"time"
 
 	ccspecs "github.com/ClusterCockpit/cc-backend/pkg/schema"
+	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/cc-message"
 	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
-	lp "github.com/ClusterCockpit/cc-metric-collector/pkg/ccMetric"
 )
 
 // the mode variable that corresponds narrow & broader options
@@ -245,8 +245,8 @@ type gssOptimizer struct {
 
 type GssOptimizer interface {
 	Init(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob, config json.RawMessage) error
-	AddInput(input chan lp.CCMetric)
-	AddOutput(output chan lp.CCMetric)
+	AddInput(input chan lp.CCMessage)
+	AddOutput(output chan lp.CCMessage)
 	NewRegion(regionname string)
 	CloseRegion(regionname string)
 	Start()
@@ -375,7 +375,7 @@ func (os *gssOptimizer) Close() {
 	cclog.ComponentDebug(os.ident, "CLOSE")
 }
 
-func (os *gssOptimizer) AddToCache(m lp.CCMetric) {
+func (os *gssOptimizer) AddToCache(m lp.CCMessage) {
 	if hostname, ok := m.GetTag("hostname"); ok {
 		if hdata, ok := os.cache[hostname]; ok {
 			if mdata, ok := hdata.metrics[m.Name()]; ok {
@@ -521,7 +521,7 @@ func (os *gssOptimizer) Start() {
 	results := make(map[string][]float64)
 	go func() {
 
-		toCache := func(m lp.CCMetric) {
+		toCache := func(m lp.CCMessage) {
 			os.AddToCache(m)
 			if os.CheckCache() {
 				cclog.ComponentDebug(os.ident, "Check cache successful")
