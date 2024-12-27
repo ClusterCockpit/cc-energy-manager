@@ -79,7 +79,7 @@ type CCMessage interface {
 	String() string                                   // Return line-protocol like string
 
 	MessageType() CCMessageType // Return message type
-	//Validate(hostnameTag string) bool // Validate that it is a valid CCMessage
+	Validate(hostnameTag string) bool // Validate that it is a valid CCMessage
 }
 
 // String implements the stringer interface for data type ccMessage
