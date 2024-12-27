@@ -78,8 +78,8 @@ type CCMessage interface {
 	RemoveField(key string)                           // Remove a field addressed by its key
 	String() string                                   // Return line-protocol like string
 
-	MessageType() CCMessageType       // Return message type
-	Validate(hostnameTag string) bool // Validate that it is a valid CCMessage
+	MessageType() CCMessageType // Return message type
+	//Validate(hostnameTag string) bool // Validate that it is a valid CCMessage
 }
 
 // String implements the stringer interface for data type ccMessage
