@@ -132,9 +132,11 @@ func (cm *clusterManager) AddOutput(output chan lp.CCMessage) {
 func (cm *clusterManager) CloseJob(meta ccspecs.BaseJob) error {
 	if len(meta.Cluster) > 0 && meta.JobID > 0 {
 		mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
+		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "Close job")
 		if cluster, ok := cm.clusters[mycluster]; ok {
 			oid := fmt.Sprintf("%d", meta.JobID)
 			if o, ok := cluster.optimizers[oid]; ok {
+				cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "Close optimizer", oid)
 				o.optimizer.Close()
 			}
 			for _, r := range meta.Resources {
@@ -158,7 +160,7 @@ func (cm *clusterManager) CloseJob(meta ccspecs.BaseJob) error {
 			delete(cluster.optimizers, fmt.Sprintf("%d", meta.JobID))
 			return nil
 		} else {
-			return fmt.Errorf("unknown cluster %s, cannot shutdown optimizer for job %d", meta.Cluster, meta.JobID)
+			return fmt.Errorf("unknown cluster %s, cannot shutdown optimizer for job %d", mycluster, meta.JobID)
 		}
 	}
 	return errors.New("job metadata does not contain data for cluster and jobid")
@@ -168,7 +170,9 @@ func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) error {
 	if len(meta.Cluster) > 0 && meta.JobID > 0 {
 		mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
 		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "New job")
-
+		if _, ok := cm.clusters[mycluster]; !ok {
+			cm.AddCluster(mycluster)
+		}
 		cluster := cm.clusters[mycluster]
 		if osettings, ok := cm.config.Optimizer[mycluster]; ok {
 			cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "New optimizer for job", meta.JobID)
@@ -213,27 +217,29 @@ func (cm *clusterManager) Start() {
 			select {
 			case <-cm.done:
 				cm.wg.Done()
+				close(cm.done)
 				cclog.ComponentDebug("ClusterManager", "DONE")
 				return
 			case m := <-cm.input:
 				mtype := m.MessageType()
 				if c, ok := m.GetTag("cluster"); ok {
-					if _, ok := cm.clusters[c]; !ok {
-						cm.AddCluster(c)
-					}
 					if mtype == lp.CCMSG_TYPE_METRIC {
-					if h, ok := m.GetTag("hostname"); ok {
-						if p, ok := cm.hosts2partitions[h]; ok {
-							cluster := fmt.Sprintf("%s-%s", c, p)
-							for _, s := range cm.clusters[cluster].hosts2optimizers[h] {
-								if o, ok := cm.clusters[cluster].optimizers[s]; ok {
-									o.input <- m
+						if h, ok := m.GetTag("hostname"); ok {
+							if p, ok := cm.hosts2partitions[h]; ok {
+								cluster := fmt.Sprintf("%s-%s", c, p)
+								if _, ok := cm.clusters[cluster]; !ok {
+									cm.AddCluster(cluster)
+								}
+								for _, s := range cm.clusters[cluster].hosts2optimizers[h] {
+									if o, ok := cm.clusters[cluster].optimizers[s]; ok {
+										o.input <- m
 									}
 								}
 							}
 						}
 					} else if mtype == lp.CCMSG_TYPE_EVENT {
 						event := lp.CCEvent(m)
+						cclog.ComponentDebug("ClusterManager", "received event", event.String())
 						if event.Name() == cm.config.JobEventName {
 							var jdata ccspecs.BaseJob
 							value := lp.GetEventValue(event)
@@ -266,14 +272,14 @@ func (cm *clusterManager) Close() {
 		for ident, s := range c.optimizers {
 			cclog.ComponentDebug("ClusterManager", "Send close to session", ident)
 			s.optimizer.Close()
-			close(s.input)
-			close(s.output)
+			//close(s.input)
+			//close(s.output)
 		}
 	}
+	cclog.ComponentDebug("ClusterManager", "Waiting for optimizers to close")
 	cm.optWg.Wait()
 	cclog.ComponentDebug("ClusterManager", "All sessions closed")
 	<-cm.done
-	cm.wg.Done()
 	cclog.ComponentDebug("ClusterManager", "CLOSE")
 }
 
