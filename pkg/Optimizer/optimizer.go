@@ -15,7 +15,8 @@ type optimizerConfig struct {
 }
 
 type optimizer struct {
-	wg       *sync.WaitGroup
+	wg       sync.WaitGroup
+	globalwg *sync.WaitGroup
 	done     chan bool
 	ident    string
 	input    chan lp.CCMessage

@@ -263,7 +263,7 @@ func isAcceleratorMetric(metric string) bool {
 
 func (o *gssOptimizer) Init(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob, config json.RawMessage) error {
 	o.ident = fmt.Sprintf("GssOptimizer(%s)", ident)
-	o.wg = wg
+	o.globalwg = wg
 	o.metadata = metadata
 	o.done = make(chan bool)
 	o.started = false
@@ -369,11 +369,17 @@ func (o *gssOptimizer) Init(ident string, wg *sync.WaitGroup, metadata ccspecs.B
 
 func (os *gssOptimizer) Close() {
 	if os.started {
-		os.ticker.Stop()
-		os.done <- true
 
+		cclog.ComponentDebug(os.ident, "Sending Done")
+		os.done <- true
 		<-os.done
+		cclog.ComponentDebug(os.ident, "STOPPING Timer")
+		//os.ticker.Stop()
 	}
+	cclog.ComponentDebug(os.ident, "Waiting for optimizer to exit")
+	os.wg.Wait()
+	cclog.ComponentDebug(os.ident, "signalling closing")
+	os.globalwg.Done()
 	cclog.ComponentDebug(os.ident, "CLOSE")
 }
 
@@ -385,31 +391,31 @@ func (os *gssOptimizer) AddToCache(m lp.CCMessage) {
 					if tid, ok := m.GetTag("type-id"); ok {
 						if _, ok := mdata.types[tid]; ok {
 							if v, ok := m.GetField("value"); ok {
-								//cclog.ComponentDebug("OptimizerSession", "add to cache", m.String())
 								if f64, err := valueToFloat64(v); err == nil {
+									cclog.ComponentDebug(os.ident, "add to cache", m.String())
 									mdata.types[tid] = f64
 								}
-							} //else {
-							// 	cclog.ComponentError("OptimizerSession", "no value", m.String())
-							// }
+							} else {
+								cclog.ComponentError(os.ident, "no value", m.String())
+							}
 						} //else {
-						// 	cclog.ComponentError("OptimizerSession", "unregistered TID", tid)
-						// }
-					} //else {
-					// 	cclog.ComponentError("OptimizerSession", "no type-id", m.String())
-					// }
-				} //else {
-				// 	cclog.ComponentError("OptimizerSession", "no type or not matching with test type", m.String())
-				// }
+						//	cclog.ComponentError(os.ident, "unregistered TID", tid)
+						//}
+					} else {
+						cclog.ComponentError(os.ident, "no type-id", m.String())
+					}
+				} else {
+					cclog.ComponentError(os.ident, "no type or not matching with test type", m.String())
+				}
 			} //else {
-			// 	cclog.ComponentError("OptimizerSession", "unregistered metric", m.Name())
-			// }
-		} //else {
-		// 	cclog.ComponentError("OptimizerSession", "unregistered host", hostname)
-		// }
-	} // else {
-	// 	cclog.ComponentError("OptimizerSession", "no hostname", m.String())
-	// }
+			//	cclog.ComponentError(os.ident, "unrequired metric", m.Name())
+			//}
+		} else {
+			cclog.ComponentError(os.ident, "unregistered host", hostname)
+		}
+	} else {
+		cclog.ComponentError(os.ident, "no hostname", m.String())
+	}
 }
 
 var GOLDEN_RATIO float64 = (math.Sqrt(5) + 1) / 2
@@ -522,7 +528,7 @@ func (os *gssOptimizer) Start() {
 	os.ticker = *time.NewTicker(os.interval)
 	os.started = true
 	results := make(map[string][]float64)
-	go func() {
+	go func(done chan bool, wg *sync.WaitGroup) {
 
 		toCache := func(m lp.CCMessage) {
 			// If it is a log message, it is likely caused by one of the energy
@@ -558,10 +564,9 @@ func (os *gssOptimizer) Start() {
 
 		for {
 			select {
-			case <-os.done:
-				// Signal to stop the optimizer and exit
-				os.wg.Done()
-				close(os.done)
+			case <-done:
+				wg.Done()
+				close(done)
 				cclog.ComponentDebug(os.ident, "DONE")
 				return
 			case m := <-os.input:
@@ -577,7 +582,9 @@ func (os *gssOptimizer) Start() {
 				// Run the optimizer at each ticker tick
 				// Iterate over the host and their result lists
 				for h, rlist := range results {
-					// Sort the list to get the median
+					if len(rlist) == 0 {
+						continue
+					}
 					sort.Float64s(rlist)
 					median := rlist[int(len(rlist)/2)]
 					// Delete the result list of the host
@@ -613,7 +620,7 @@ func (os *gssOptimizer) Start() {
 				}
 			}
 		}
-	}()
+	}(os.done, &os.wg)
 	cclog.ComponentDebug(os.ident, "START")
 }
 
@@ -625,6 +632,7 @@ func NewGssOptimizer(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob,
 		cclog.ComponentError(o.ident, "failed to initialize GssOptimizer")
 		return nil, err
 	}
+	wg.Add(1)
 
 	return o, err
 }

@@ -147,10 +147,10 @@ func shutdownHandler(config *RuntimeConfig, shutdownSignal chan os.Signal) {
 		cclog.Debug("Shutdown ClusterManager...")
 		config.ClustManager.Close()
 	}
-	if config.Optimizer != nil {
-		cclog.Debug("Shutdown Optimizer....")
-		config.Optimizer.Close()
-	}
+	// if config.Optimizer != nil {
+	// 	cclog.Debug("Shutdown Optimizer....")
+	// 	config.Optimizer.Close()
+	// }
 }
 
 func mainFunc() int {
@@ -162,7 +162,7 @@ func mainFunc() int {
 		ReceiveManager: nil,
 		// Router:         nil,
 		// DB added an Optimer to rcfg
-		Optimizer:    nil,
+		// Optimizer:    nil,
 		ClustManager: nil,
 		CliArgs:      ReadCli(),
 	}
