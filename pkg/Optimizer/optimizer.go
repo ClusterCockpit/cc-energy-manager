@@ -12,6 +12,10 @@ import (
 type optimizerConfig struct {
 	Type    string   `json:"type"`
 	Metrics []string `json:"metrics"`
+	Control struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	} `json:"control"`
 }
 
 type optimizer struct {

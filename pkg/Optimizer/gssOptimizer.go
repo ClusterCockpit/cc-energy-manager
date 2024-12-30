@@ -597,6 +597,15 @@ func (os *gssOptimizer) Start() {
 							cclog.ComponentDebug(os.ident, "Analyse cache with GSS for region", os.regionname)
 							d.powercap = d.Update(d.powercap, median)
 							d.edplast = median
+							out, err := lp.NewPutControl(os.config.Control.Name, map[string]string{
+								"hostname": h,
+								"type":     os.config.Control.Type,
+								"type-id":  "0",
+							}, nil, fmt.Sprintf("%d", d.powercap), time.Now())
+							if err == nil {
+								cclog.ComponentDebug(os.ident, out.String())
+								os.output <- out
+							}
 						} else {
 							cclog.ComponentDebug(os.ident, "Saving EDP for next round for region", os.regionname)
 							d.edplast = median
@@ -610,6 +619,16 @@ func (os *gssOptimizer) Start() {
 							cclog.ComponentDebug(os.ident, "Analyse cache with GSS")
 							d.powercap = d.Update(d.powercap, median)
 							d.edplast = median
+							cclog.ComponentDebug(os.ident, "New powercap", d.powercap)
+							out, err := lp.NewPutControl(os.config.Control.Name, map[string]string{
+								"hostname": h,
+								"type":     os.config.Control.Type,
+								"type-id":  "0",
+							}, nil, fmt.Sprintf("%d", d.powercap), time.Now())
+							if err == nil {
+								cclog.ComponentDebug(os.ident, out.String())
+								os.output <- out
+							}
 						} else {
 							cclog.ComponentDebug(os.ident, "Saving EDP for next round")
 							d.edplast = median
