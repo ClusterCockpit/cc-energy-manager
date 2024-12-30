@@ -136,7 +136,8 @@ func (cm *clusterManager) AddOutput(output chan lp.CCMessage) {
 
 func (cm *clusterManager) CloseJob(meta ccspecs.BaseJob) error {
 	if len(meta.Cluster) > 0 && meta.JobID > 0 {
-		mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
+		//mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
+		mycluster := meta.Cluster
 		// Get the optimizers for <cluster>-<partition>
 		if cluster, ok := cm.clusters[mycluster]; ok {
 			oid := fmt.Sprintf("%d", meta.JobID)
@@ -180,7 +181,8 @@ func (cm *clusterManager) CloseJob(meta ccspecs.BaseJob) error {
 
 func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) error {
 	if len(meta.Cluster) > 0 && meta.JobID > 0 {
-		mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
+		//mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
+		mycluster := meta.Cluster
 		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "New job")
 		cluster := cm.clusters[mycluster]
 		// Only accept jobs for configured <cluster>-<partition> entries
@@ -254,6 +256,7 @@ func (cm *clusterManager) Start() {
 						cm.AddCluster(c)
 						// It is a non-configured cluster, go to next message
 						if _, ok := cm.clusters[c]; !ok {
+							cclog.ComponentError("ClusterManager", "Invalid cluster", c)
 							continue
 						}
 					}
@@ -263,8 +266,9 @@ func (cm *clusterManager) Start() {
 					// multi-node jobs.
 					if mtype == lp.CCMSG_TYPE_METRIC || mtype == lp.CCMSG_TYPE_LOG {
 						if h, ok := m.GetTag("hostname"); ok {
-							if p, ok := cm.hosts2partitions[h]; ok {
-								cluster := fmt.Sprintf("%s-%s", c, p)
+							if _, ok := cm.hosts2partitions[h]; ok {
+								//cluster := fmt.Sprintf("%s-%s", c, p)
+								cluster := c
 								for _, s := range cm.clusters[cluster].hosts2optimizers[h] {
 									if o, ok := cm.clusters[cluster].optimizers[s]; ok {
 										o.input <- m
@@ -275,8 +279,10 @@ func (cm *clusterManager) Start() {
 						// We are only interested in two events, job messages and job region messages
 					} else if mtype == lp.CCMSG_TYPE_EVENT {
 						event := lp.CCEvent(m)
+						cclog.ComponentDebug("ClusterManager", "Got event", m.String())
 						// For job messages, the payload gets decoded to a BaseJob as specified by cc-specification
 						if event.Name() == cm.config.JobEventName {
+							cclog.ComponentDebug("ClusterManager", "Got job event", m.String())
 							var jdata ccspecs.BaseJob
 							value := lp.GetEventValue(event)
 							d := json.NewDecoder(strings.NewReader(value))
@@ -302,8 +308,9 @@ func (cm *clusterManager) Start() {
 						} else if event.Name() == cm.config.JobRegionEventName {
 							data := lp.GetEventValue(event)
 							if h, ok := m.GetTag("hostname"); ok {
-								if p, ok := cm.hosts2partitions[h]; ok {
-									cluster := fmt.Sprintf("%s-%s", c, p)
+								if _, ok := cm.hosts2partitions[h]; ok {
+									//cluster := fmt.Sprintf("%s-%s", c, p)
+									cluster := c
 									for _, s := range cm.clusters[cluster].hosts2optimizers[h] {
 										if o, ok := cm.clusters[cluster].optimizers[s]; ok {
 											o.optimizer.NewRegion(data)
@@ -339,8 +346,6 @@ func (cm *clusterManager) Close() {
 	cclog.ComponentDebug("ClusterManager", "All sessions closed")
 	// Wait until the cluster manager receive loop finished
 	<-cm.done
-	// Signal that the cluster manager is done
-	cm.wg.Done()
 	cclog.ComponentDebug("ClusterManager", "CLOSE")
 }
 
