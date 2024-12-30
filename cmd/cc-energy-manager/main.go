@@ -232,26 +232,19 @@ func mainFunc() int {
 	rcfg.Sync.Add(1)
 	go shutdownHandler(&rcfg, shutdownSignal)
 
-	RouterToOptimizerChannel := make(chan lp.CCMessage, 200)
-	ReceiversToRouterChannel := make(chan lp.CCMessage, 200)
-	OptimizerToSinksChannel := make(chan lp.CCMessage, 200)
+	//RouterToOptimizerChannel := make(chan lp.CCMessage, 200)
+	ReceiversToClusterManagerChannel := make(chan lp.CCMessage, 200)
+	ClusterManagerToSinksChannel := make(chan lp.CCMessage, 200)
 
-	rcfg.SinkManager.AddInput(OptimizerToSinksChannel)
-	rcfg.ClustManager.AddOutput(RouterToOptimizerChannel)
-	rcfg.ReceiveManager.AddOutput(ReceiversToRouterChannel)
-	rcfg.ClustManager.AddInput(ReceiversToRouterChannel)
+	rcfg.SinkManager.AddInput(ClusterManagerToSinksChannel)
+	rcfg.ClustManager.AddOutput(ClusterManagerToSinksChannel)
+	rcfg.ReceiveManager.AddOutput(ReceiversToClusterManagerChannel)
+	rcfg.ClustManager.AddInput(ReceiversToClusterManagerChannel)
 
 	// Start the managers
 	rcfg.SinkManager.Start()
 	rcfg.ReceiveManager.Start()
 	rcfg.ClustManager.Start()
-
-	// Wait until one tick has passed. This is a workaround
-	if rcfg.CliArgs["once"] == "true" {
-		x := 1.2 * float64(rcfg.Interval.Seconds())
-		time.Sleep(time.Duration(int(x)) * time.Second)
-		shutdownSignal <- os.Interrupt
-	}
 
 	// Wait that all goroutines finish
 	rcfg.Sync.Wait()
