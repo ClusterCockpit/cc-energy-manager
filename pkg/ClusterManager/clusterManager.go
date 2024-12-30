@@ -19,6 +19,7 @@ type jobSession struct {
 	metadata  ccspecs.BaseJob
 	input     chan lp.CCMessage
 	output    chan lp.CCMessage
+	done      chan bool
 }
 
 type clusterEntry struct {
@@ -201,10 +202,21 @@ func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) error {
 				metadata:  meta,
 				input:     make(chan lp.CCMessage),
 				output:    make(chan lp.CCMessage),
+				done:      make(chan bool),
 			}
 			// Add channels of job session to optimizer
 			o.AddInput(j.input)
 			o.AddOutput(j.output)
+			go func(job jobSession, allout chan lp.CCMessage) {
+				for {
+					select {
+					case <-job.done:
+						return
+					case msg := <-job.output:
+						allout <- msg
+					}
+				}
+			}(j, cm.output)
 			// Register optimizer using the job ID as key
 			cluster.optimizers[fmt.Sprintf("%d", meta.JobID)] = j
 			// When receiving messages, we get the cluster and host name but not the
@@ -279,10 +291,8 @@ func (cm *clusterManager) Start() {
 						// We are only interested in two events, job messages and job region messages
 					} else if mtype == lp.CCMSG_TYPE_EVENT {
 						event := lp.CCEvent(m)
-						cclog.ComponentDebug("ClusterManager", "Got event", m.String())
 						// For job messages, the payload gets decoded to a BaseJob as specified by cc-specification
 						if event.Name() == cm.config.JobEventName {
-							cclog.ComponentDebug("ClusterManager", "Got job event", m.String())
 							var jdata ccspecs.BaseJob
 							value := lp.GetEventValue(event)
 							d := json.NewDecoder(strings.NewReader(value))
@@ -333,10 +343,12 @@ func (cm *clusterManager) Close() {
 	// Send close signal the cluster manager receive loop
 	cm.done <- true
 	// Iterate over optimizers to and close them
+
 	for _, c := range cm.clusters {
 		for ident, s := range c.optimizers {
 			cclog.ComponentDebug("ClusterManager", "Send close to session", ident)
 			s.optimizer.Close()
+			s.done <- true
 			//close(s.input)
 			//close(s.output)
 		}
