@@ -4,7 +4,7 @@ go 1.21.1
 
 require (
 	github.com/ClusterCockpit/cc-backend v1.3.0
-	github.com/ClusterCockpit/cc-metric-collector v0.6.8-0.20241227150014-16faa7086712
+	github.com/ClusterCockpit/cc-metric-collector v0.7.1-0.20241227152259-7b343d0bab70
 	github.com/influxdata/influxdb-client-go/v2 v2.13.0
 	github.com/influxdata/line-protocol v0.0.0-20210922203350-b1ad95c89adf
 	github.com/influxdata/line-protocol/v2 v2.2.1

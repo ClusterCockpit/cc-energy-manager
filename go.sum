@@ -4,6 +4,8 @@ github.com/ClusterCockpit/cc-metric-collector v0.6.8-0.20241227150014-16faa70867
 github.com/ClusterCockpit/cc-metric-collector v0.6.8-0.20241227150014-16faa7086712/go.mod h1:NEKcolwf9/GvotJriOIZK0YKg4BY6I2JDUidEVEGuFI=
 github.com/ClusterCockpit/cc-metric-collector v0.7.0 h1:9LH+PV69mltCd8nA5tKCn+Hyi99uDJGXWLM8z8axzrU=
 github.com/ClusterCockpit/cc-metric-collector v0.7.0/go.mod h1:NEKcolwf9/GvotJriOIZK0YKg4BY6I2JDUidEVEGuFI=
+github.com/ClusterCockpit/cc-metric-collector v0.7.1-0.20241227152259-7b343d0bab70 h1:33kQMFtrE5eJ10v9vzLW/VJ2Ws+OziqXhJMLZM/7rqE=
+github.com/ClusterCockpit/cc-metric-collector v0.7.1-0.20241227152259-7b343d0bab70/go.mod h1:NEKcolwf9/GvotJriOIZK0YKg4BY6I2JDUidEVEGuFI=
 github.com/ClusterCockpit/cc-units v0.4.0 h1:zP5DOu99GmErW0tCDf0gcLrlWt42RQ9dpoONEOh4cI0=
 github.com/ClusterCockpit/cc-units v0.4.0/go.mod h1:3S3PAhAayS3pbgcT4q9Vn9VJw22Op51X0YimtG77zBw=
 github.com/ClusterCockpit/go-rocm-smi v0.3.0 h1:1qZnSpG7/NyLtc7AjqnUL9Jb8xtqG1nMVgp69rJfaR8=
