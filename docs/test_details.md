@@ -50,3 +50,95 @@ The output message format used for debugging and monitoring is :
 ```jobID=%s, hostname=%s, powercap=%d, total_package_energy=%f, total_retired_instructions=%d, timestamp=%s```
 
 Where ```%s``` is a string. ```%d``` is a integer, ```%f``` is a float
+
+## Subscribing to the desired NATS channel
+In the main function the following function call ``` lines := CreateCommunicator(subject_receive) ``` subscribes to the ccgeneral NATS channel ``` subject_receive = "ccgeneral" ```.
+
+```
+func CreateJobInfoCommunicator(subject string) []string {
+	// Connect to server
+	nc, err := nats.Connect(nats.DefaultURL)
+	if err != nil {
+		panic(err)
+	}
+
+	// Channel Subscriber
+	ch := make(chan *nats.Msg, 200)
+
+	sub, err := nc.ChanSubscribe(subject, ch)
+	if err != nil {
+		fmt.Println("subscription to NATS channel error")
+		sub.Unsubscribe()
+		panic(err)
+	}
+
+	msg := <-ch
+
+	// split the message block into individual lines
+	var lines []string = regexp.MustCompile("\r?\n").Split(string(msg.Data), -1)
+
+	// return the individual lines as strings
+	return lines
+
+}
+```
+
+The ``` CreateCommunicator(subject_receive) ``` is a dummy function, which takes the name of the NATS channel as a parameter and returns the message lines as an array of string.
+
+## Parsing the incoming NATS messages
+After subscribing to the ```ccgeneral``` NATS channel, we need to extract the retired instructions and package energy values for the specific nodes. To do this we need to parse the incoming messages.
+
+The function ``` ParseNatsMessages(lines) ```, which takes an array of lines as the input parameter.
+```
+func ParseNatsMessages(lines []string) {
+	// get the number of lines in the nats message
+	var max_lines int = len(lines)
+
+	// loop through all the lines
+	for i := 0; i < max_lines; i++ {
+		if start {
+			// Debug statements
+			if debug {
+				fmt.Println("if start is true : ", start)
+			}
+			if debug {
+				fmt.Println(lines[i])
+			}
+			// get the lines that contain the retired instruction metrics
+			if strings.Contains(lines[i], "retired_instructions") {
+				ParseRetiredInstructions(lines[i])
+			}
+			// get the lines that contain the package metrics
+			if strings.Contains(lines[i], "pkg_energy") {
+				if strings.Contains(lines[i], "type-id=1") {
+					ParsePackageEnergyEnd(lines[i])
+				}
+				ParsePackageEnergy(lines[i])
+			}
+		}
+		if !start {
+			if strings.Contains(lines[i], "proc_total") {
+				start = true
+				if debug {
+					fmt.Println("begining of metric block used for the calculation")
+				}
+				// verify that the pkg_enery_total and retired_instruction_total values are zero
+				if pkg_energy_total != 0 {
+					if debug {
+						fmt.Println("In the start function pkg_energy_total is not NULL. So set to NULL")
+					}
+					pkg_energy_total = 0.0
+				}
+				if retired_instruction_total != 0 {
+					if debug {
+						fmt.Println("In the start function retired_instruction_total is not NULL. So set to NULL")
+					}
+					retired_instruction_total = 0
+				}
+			}
+		}
+	}
+}
+```
+
+### 
