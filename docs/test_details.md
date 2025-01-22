@@ -83,7 +83,30 @@ func CreateJobInfoCommunicator(subject string) []string {
 }
 ```
 
-The ``` CreateCommunicator(subject_receive) ``` is a dummy function, which takes the name of the NATS channel as a parameter and returns the message lines as an array of string.
+The ``` CreateCommunicator(subject_receive) ``` is a dummy function, which takes the name of the NATS channel as a parameter and returns the message lines as an array of string. This function needs to be modified because or replicated functionality with the function ``` func CreateCommunicator(subject string) []string ```.
+
+## Main processing loop
+To ensure that the messages are being contimually processed at a freuency defined by the system we encapsulate the message reading, parsing, GSS optimization calculations and sending the output messages used to update the node hardware settings.
+```
+// continually calculate the GSS updates
+	for {
+		// the inner loop is where the NATS messages are processed
+		for i := 0; i < optimization_number; i++ {
+			// store the lines of data sent from the NATS server into an array of strings
+			lines := CreateCommunicator(subject_receive)
+
+			// print the number of lines in the message
+			if debug {
+				fmt.Println("number of lines = ", len(lines))
+			}
+
+			// parsing the individual lines of the NATS server message
+			ParseNatsMessages(lines)
+		}
+		// sleep for the specified GSS interval (system policy)
+		time.Sleep(time_step_seconds * time.Second)
+	}
+```
 
 ## Parsing the incoming NATS messages
 After subscribing to the ```ccgeneral``` NATS channel, we need to extract the retired instructions and package energy values for the specific nodes. To do this we need to parse the incoming messages.
