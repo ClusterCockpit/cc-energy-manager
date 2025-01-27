@@ -25,6 +25,9 @@ var start bool = false
 var hostname string = ""
 var output_message string = ""
 
+// Variable for NATS job subject that we listen to
+var subject_receive_job string = ""
+
 // Variable for NATS subject that we listen to
 var subject_receive string = ""
 

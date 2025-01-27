@@ -6,8 +6,13 @@ import "fmt"
 
 const debug = false
 
+// define and initialize the EDP value to -1 as a default
 var edp float64 = -1
+
+// define and initialize the fudge factor value to 0 as a default
 var fudge_factor int = 0
+
+// define a pointer to the GSS datastructure and initialize it to NULL
 var g *GSS = nil
 
 func main() {
@@ -34,8 +39,8 @@ func main() {
 		fmt.Println("After calling the function SetFudgeFactor")
 	}
 
-	// initialize the EDP value to -1 as a default
-	edp = -1
+	// set the nats subscription subject to listen to
+	subject_receive_job = "cc_job"
 
 	// set the nats subscription subject to listen to
 	subject_receive = "ccgeneral"
@@ -45,6 +50,18 @@ func main() {
 
 	// set the nats subscription subject to publish to CC
 	subject_publish_message = "ee-hpc-nats-cc"
+
+	if debug {
+		fmt.Println("Initial job_start status = ", job_start)
+		fmt.Println("Initial job_start status = ", job_stop)
+	}
+
+	// Currently the job_lines is a dummy setup and requires the start mechanism to be available
+	job_lines := CreateJobInfoCommunicator(subject_receive_job)
+	// print the number of lines in the message
+	if debug {
+		fmt.Println("number of lines in the job message = ", len(job_lines))
+	}
 
 	// store the lines of data sent from the NATS server into an array of strings
 	lines := CreateCommunicator(subject_receive)
