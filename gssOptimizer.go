@@ -182,6 +182,7 @@ func CreateLimits(min, max, idle, step int) Limits {
 	return lim
 }
 
+// update the GSS borders the powercap and calculated edp values
 func (gss *GSS) UpdateBordersReturnValue(powercap int, edp float64) {
 	fmt.Println("Entering the function UpdateBordersReturnValue")
 	fmt.Println("powercap is ", powercap, " and edp is ", edp)
