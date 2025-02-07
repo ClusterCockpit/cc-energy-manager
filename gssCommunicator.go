@@ -22,11 +22,15 @@ var pkg_energy_total float64 = 0.0
 // initialize the start to zero
 var start bool = false
 
+var package_one bool = false
+
 var hostname string = ""
 var output_message string = ""
 
+/* duplicate
 // Variable for NATS job subject that we listen to
 var subject_receive_job string = ""
+*/
 
 // Variable for NATS subject that we listen to
 var subject_receive string = ""
@@ -46,6 +50,7 @@ var job_stop bool = false
 var jobID string = "my_job_001"
 var timestamp = ""
 
+/* Duplicate function not required
 // create the job information communicator
 func CreateJobInfoCommunicator(subject string) []string {
 	// Connect to server
@@ -71,8 +76,8 @@ func CreateJobInfoCommunicator(subject string) []string {
 
 	// return the individual lines as strings
 	return lines
-
 }
+*/
 
 // create the communicator from the input parameters subscription subject
 // and returns the NATS messages as an array of strings
@@ -102,6 +107,7 @@ func CreateCommunicator(subject string) []string {
 
 }
 
+// NATS message order retired instruction the package energy
 func ParseNatsMessages(lines []string) {
 	// get the number of lines in the nats message
 	var max_lines int = len(lines)
@@ -116,40 +122,71 @@ func ParseNatsMessages(lines []string) {
 			if debug {
 				fmt.Println(lines[i])
 			}
+			// need to add a comparison to select either SinkManager or MetricRouter messages
+			// if strings.Contains(lines[i], "SinkManager") {
+			//	Parse for retired instructions and package energy
+			//}
+
 			// get the lines that contain the retired instruction metrics
 			if strings.Contains(lines[i], "retired_instructions") {
 				ParseRetiredInstructions(lines[i])
 			}
 			// get the lines that contain the package metrics
 			if strings.Contains(lines[i], "pkg_energy") {
+				// need to add additional comparison statement for correctness
+				if strings.Contains(lines[i], "type-id=0") {
+					package_one = true
+				}
 				if strings.Contains(lines[i], "type-id=1") {
-					ParsePackageEnergyEnd(lines[i])
+					if package_one {
+						ParsePackageEnergyEnd(lines[i])
+					} else {
+						reset_variables()
+						return
+					}
 				}
 				ParsePackageEnergy(lines[i])
 			}
 		}
 		if !start {
 			if strings.Contains(lines[i], "proc_total") {
+
+				reset_variables()
+
 				start = true
+
 				if debug {
 					fmt.Println("begining of metric block used for the calculation")
 				}
-				// verify that the pkg_enery_total and retired_instruction_total values are zero
-				if pkg_energy_total != 0 {
-					if debug {
-						fmt.Println("In the start function pkg_energy_total is not NULL. So set to NULL")
+				/*
+					// Debug verify that the pkg_enery_total and retired_instruction_total values are zero
+					if pkg_energy_total != 0 {
+						if debug {
+							fmt.Println("In the start function pkg_energy_total is not NULL. So set to NULL")
+						}
+						reset_variables()
+						start = true
 					}
-					pkg_energy_total = 0.0
-				}
-				if retired_instruction_total != 0 {
-					if debug {
-						fmt.Println("In the start function retired_instruction_total is not NULL. So set to NULL")
+					if retired_instruction_total != 0 {
+						if debug {
+							fmt.Println("In the start function retired_instruction_total is not NULL. So set to NULL")
+						}
+						reset_variables()
+						start = true
 					}
-					retired_instruction_total = 0
-				}
+				*/
 			}
 		}
+
 	}
+}
+
+// reset values of variables used by the opyimizer
+func reset_variables() {
+	retired_instruction_total = 0
+	pkg_energy_total = 0.0
+	start = false
+	package_one = false
 }
 
 // parse the line that contains the string retired instructions
