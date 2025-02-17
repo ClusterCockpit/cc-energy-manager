@@ -1,3 +1,7 @@
+// Copyright (C) NHR@FAU, University Erlangen-Nuremberg.
+// All rights reserved. This file is part of cc-energy-manager.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
 package optimizer
 
 import (
@@ -9,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	ccspecs "github.com/ClusterCockpit/cc-backend/pkg/schema"
-	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/cc-message"
-	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
+	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
+	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
+	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
 )
 
 // the mode variable that corresponds narrow & broader options
@@ -105,7 +109,6 @@ func (d *gssOptimizerData) SwitchToNarrowDown() {
 }
 
 func (d *gssOptimizerData) NarrowDown() int {
-
 	if d.metric_lower_inner_border == 0 {
 		return d.tuning_lower_inner_border
 	}
@@ -145,8 +148,8 @@ func (d *gssOptimizerData) NarrowDown() int {
 			return d.tuning_upper_outer_border
 		}
 	}
-
 }
+
 func (d *gssOptimizerData) BroadenDown() int {
 	// Calculate ratio (after shifting borders)
 	var a int = int((GOLDEN_RATIO - 1) * float64(d.tuning_upper_inner_border-d.tuning_lower_inner_border))
@@ -191,6 +194,7 @@ func (d *gssOptimizerData) BroadenDown() int {
 		return d.tuning_lower_inner_border
 	}
 }
+
 func (d *gssOptimizerData) BroadenUp() int {
 	// Calculate ratio (after shifting borders)
 	var a int = int((GOLDEN_RATIO - 1) * float64((d.tuning_upper_inner_border)-(d.tuning_lower_inner_border)))
@@ -234,11 +238,11 @@ func (d *gssOptimizerData) BroadenUp() int {
 
 type gssOptimizer struct {
 	optimizer
-	//last     float64
+	// last     float64
 	config   gssOptimizerConfig
 	cache    map[string]gssOptimizerHost
 	interval time.Duration
-	//edplast  map[string]float64
+	// edplast  map[string]float64
 	data       map[string]gssOptimizerData
 	regionname string
 	region     map[string]gssOptimizerData
@@ -257,6 +261,7 @@ type GssOptimizer interface {
 func isSocketMetric(metric string) bool {
 	return (strings.Contains(metric, "power") || strings.Contains(metric, "energy") || metric == "mem_bw")
 }
+
 func isAcceleratorMetric(metric string) bool {
 	return strings.HasPrefix(metric, "acc_")
 }
@@ -374,7 +379,7 @@ func (os *gssOptimizer) Close() {
 		os.done <- true
 		<-os.done
 		cclog.ComponentDebug(os.ident, "STOPPING Timer")
-		//os.ticker.Stop()
+		// os.ticker.Stop()
 	}
 	cclog.ComponentDebug(os.ident, "Waiting for optimizer to exit")
 	os.wg.Wait()
@@ -398,7 +403,7 @@ func (os *gssOptimizer) AddToCache(m lp.CCMessage) {
 							} else {
 								cclog.ComponentError(os.ident, "no value", m.String())
 							}
-						} //else {
+						} // else {
 						//	cclog.ComponentError(os.ident, "unregistered TID", tid)
 						//}
 					} else {
@@ -407,7 +412,7 @@ func (os *gssOptimizer) AddToCache(m lp.CCMessage) {
 				} else {
 					cclog.ComponentError(os.ident, "no type or not matching with test type", m.String())
 				}
-			} //else {
+			} // else {
 			//	cclog.ComponentError(os.ident, "unrequired metric", m.Name())
 			//}
 		} else {
@@ -504,7 +509,6 @@ func (os *gssOptimizer) CalcMetric() (map[string]float64, error) {
 		out[hostname] = math.NaN()
 		if instr, ok := values["instructions"]; ok {
 			if energy, ok := values["cpu_energy"]; ok {
-
 				out[hostname] = (float64(hdata.fudge_factor) + energy) / instr
 			}
 		}
@@ -529,7 +533,6 @@ func (os *gssOptimizer) Start() {
 	os.started = true
 	results := make(map[string][]float64)
 	go func(done chan bool, wg *sync.WaitGroup) {
-
 		toCache := func(m lp.CCMessage) {
 			// If it is a log message, it is likely caused by one of the energy
 			// managers control messages sent to the host. The log messages
@@ -688,7 +691,6 @@ func (gss *gssOptimizer) NewRegion(regionname string) {
 			},
 		}
 	}
-
 }
 
 func (gss *gssOptimizer) CloseRegion(regionname string) {

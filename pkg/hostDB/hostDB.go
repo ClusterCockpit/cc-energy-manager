@@ -1,3 +1,7 @@
+// Copyright (C) NHR@FAU, University Erlangen-Nuremberg.
+// All rights reserved. This file is part of cc-energy-manager.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
 package hostdb
 
 import (
@@ -5,7 +9,7 @@ import (
 	"fmt"
 
 	// topo "github.com/ClusterCockpit/cc-node-controller/pkg/ccTopology"
-	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
+	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	"github.com/nats-io/nats.go"
 )
 
