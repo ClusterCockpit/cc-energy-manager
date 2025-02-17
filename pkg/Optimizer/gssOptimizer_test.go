@@ -1,3 +1,7 @@
+// Copyright (C) NHR@FAU, University Erlangen-Nuremberg.
+// All rights reserved. This file is part of cc-energy-manager.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
 package optimizer
 
 import (
@@ -8,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	ccspecs "github.com/ClusterCockpit/cc-backend/pkg/schema"
-	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/cc-message"
-	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
+	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
+	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
+	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
 )
 
 func TestInit(t *testing.T) {
@@ -42,7 +46,6 @@ func TestInit(t *testing.T) {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
 		return
 	}
-
 }
 
 func TestStart(t *testing.T) {

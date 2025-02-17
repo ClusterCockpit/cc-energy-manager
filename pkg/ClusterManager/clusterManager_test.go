@@ -1,3 +1,7 @@
+// Copyright (C) NHR@FAU, University Erlangen-Nuremberg.
+// All rights reserved. This file is part of cc-energy-manager.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
 package clustermanager
 
 import (
@@ -6,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	ccspecs "github.com/ClusterCockpit/cc-backend/pkg/schema"
-	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
+	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
+	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
 )
 
 func TestNew(t *testing.T) {

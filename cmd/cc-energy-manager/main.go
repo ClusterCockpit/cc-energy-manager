@@ -1,5 +1,5 @@
-// Copyright (C) 2023 NHR@FAU, University Erlangen-Nuremberg.
-// All rights reserved.
+// Copyright (C) NHR@FAU, University Erlangen-Nuremberg.
+// All rights reserved. This file is part of cc-energy-manager.
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 /*
@@ -29,20 +29,20 @@ import (
 	"flag"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
+	"time"
 
 	cmanager "github.com/ClusterCockpit/cc-energy-manager/pkg/ClusterManager"
-	"github.com/ClusterCockpit/cc-metric-collector/receivers"
-	"github.com/ClusterCockpit/cc-metric-collector/sinks"
+	"github.com/ClusterCockpit/cc-lib/receivers"
+	"github.com/ClusterCockpit/cc-lib/sinks"
 
 	//	"strings"
-	"sync"
-	"time"
 
 	// DB added
 	opt "github.com/ClusterCockpit/cc-energy-manager/pkg/Optimizer"
-	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/cc-message"
-	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
+	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
+	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
 )
 
 type CentralConfigFile struct {
@@ -73,7 +73,7 @@ type RuntimeConfig struct {
 	ReceiveManager receivers.ReceiveManager
 	// Router         router.MetricRouter
 	ClustManager cmanager.ClusterManager
-	//DB
+	// DB
 	Optimizer opt.Optimizer
 
 	Channels []chan lp.CCMetric
@@ -232,7 +232,7 @@ func mainFunc() int {
 	rcfg.Sync.Add(1)
 	go shutdownHandler(&rcfg, shutdownSignal)
 
-	//RouterToOptimizerChannel := make(chan lp.CCMessage, 200)
+	// RouterToOptimizerChannel := make(chan lp.CCMessage, 200)
 	ReceiversToClusterManagerChannel := make(chan lp.CCMessage, 200)
 	ClusterManagerToSinksChannel := make(chan lp.CCMessage, 200)
 
