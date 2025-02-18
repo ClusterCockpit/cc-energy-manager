@@ -1,3 +1,7 @@
+// Copyright (C) NHR@FAU, University Erlangen-Nuremberg.
+// All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
 package clustermanager
 
 import (
@@ -25,7 +29,7 @@ type jobSession struct {
 type clusterEntry struct {
 	name             string
 	hosts2optimizers map[string][]string
-	optimizers       map[string]jobSession //optimizer.Optimizer
+	optimizers       map[string]jobSession // optimizer.Optimizer
 	maxBudget_watt   float64
 	minBudget_watt   float64
 	curBudget_watt   float64
@@ -137,7 +141,7 @@ func (cm *clusterManager) AddOutput(output chan lp.CCMessage) {
 
 func (cm *clusterManager) CloseJob(meta ccspecs.BaseJob) error {
 	if len(meta.Cluster) > 0 && meta.JobID > 0 {
-		//mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
+		// mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
 		mycluster := meta.Cluster
 		// Get the optimizers for <cluster>-<partition>
 		if cluster, ok := cm.clusters[mycluster]; ok {
@@ -182,7 +186,7 @@ func (cm *clusterManager) CloseJob(meta ccspecs.BaseJob) error {
 
 func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) error {
 	if len(meta.Cluster) > 0 && meta.JobID > 0 {
-		//mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
+		// mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
 		mycluster := meta.Cluster
 		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "New job")
 		cluster := cm.clusters[mycluster]
@@ -247,7 +251,6 @@ func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) error {
 }
 
 func (cm *clusterManager) Start() {
-
 	cm.wg.Add(1)
 	go func() {
 		for {
@@ -279,7 +282,7 @@ func (cm *clusterManager) Start() {
 					if mtype == lp.CCMSG_TYPE_METRIC || mtype == lp.CCMSG_TYPE_LOG {
 						if h, ok := m.GetTag("hostname"); ok {
 							if _, ok := cm.hosts2partitions[h]; ok {
-								//cluster := fmt.Sprintf("%s-%s", c, p)
+								// cluster := fmt.Sprintf("%s-%s", c, p)
 								cluster := c
 								for _, s := range cm.clusters[cluster].hosts2optimizers[h] {
 									if o, ok := cm.clusters[cluster].optimizers[s]; ok {
@@ -319,12 +322,12 @@ func (cm *clusterManager) Start() {
 							data := lp.GetEventValue(event)
 							if h, ok := m.GetTag("hostname"); ok {
 								if _, ok := cm.hosts2partitions[h]; ok {
-									//cluster := fmt.Sprintf("%s-%s", c, p)
+									// cluster := fmt.Sprintf("%s-%s", c, p)
 									cluster := c
 									for _, s := range cm.clusters[cluster].hosts2optimizers[h] {
 										if o, ok := cm.clusters[cluster].optimizers[s]; ok {
 											o.optimizer.NewRegion(data)
-											//o.optimizer.CloseRegion(data)
+											// o.optimizer.CloseRegion(data)
 										}
 									}
 								}
@@ -339,7 +342,6 @@ func (cm *clusterManager) Start() {
 }
 
 func (cm *clusterManager) Close() {
-
 	// Send close signal the cluster manager receive loop
 	cm.done <- true
 	// Iterate over optimizers to and close them
@@ -349,8 +351,8 @@ func (cm *clusterManager) Close() {
 			cclog.ComponentDebug("ClusterManager", "Send close to session", ident)
 			s.optimizer.Close()
 			s.done <- true
-			//close(s.input)
-			//close(s.output)
+			// close(s.input)
+			// close(s.output)
 		}
 	}
 	// Wait until all optimizers are closed

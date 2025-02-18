@@ -47,15 +47,3 @@ func (os *optimizer) AddInput(input chan lp.CCMessage) {
 func (os *optimizer) AddOutput(output chan lp.CCMessage) {
 	os.output = output
 }
-
-// func (o *optimizer) Init(config json.RawMessage) error {
-// 	return nil
-// }
-// func (o *optimizer) Run(metadata *ccspecs.BaseJob, data []lp.CCMetric) ([]lp.CCControl, error) {
-// 	controls := make([]lp.CCControl, 0)
-// 	return controls, nil
-// }
-
-// func (o *optimizer) Close() {
-
-// }

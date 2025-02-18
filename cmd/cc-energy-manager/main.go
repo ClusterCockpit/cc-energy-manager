@@ -1,27 +1,7 @@
-// Copyright (C) 2023 NHR@FAU, University Erlangen-Nuremberg.
+// Copyright (C) NHR@FAU, University Erlangen-Nuremberg.
 // All rights reserved.
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
-/*
-package main
-
-import (
-	"fmt"
-
-	"github.com/ClusterCockpit/cc-energy-manager/internal/api"
-	"github.com/ClusterCockpit/cc-metric-collector/collectors"
-)
-
-var likwid_collector collectors.LikwidMetric
-
-func main() {
-
-	if err := api.ApiPrinter("Bla"); err != nil {
-		fmt.Printf("Error: %v\n", err)
-	}
-}
-*/
-
 package main
 
 import (
@@ -29,15 +9,13 @@ import (
 	"flag"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
+	"time"
 
 	cmanager "github.com/ClusterCockpit/cc-energy-manager/pkg/ClusterManager"
 	"github.com/ClusterCockpit/cc-metric-collector/receivers"
 	"github.com/ClusterCockpit/cc-metric-collector/sinks"
-
-	//	"strings"
-	"sync"
-	"time"
 
 	// DB added
 	opt "github.com/ClusterCockpit/cc-energy-manager/pkg/Optimizer"
@@ -73,7 +51,7 @@ type RuntimeConfig struct {
 	ReceiveManager receivers.ReceiveManager
 	// Router         router.MetricRouter
 	ClustManager cmanager.ClusterManager
-	//DB
+	// DB
 	Optimizer opt.Optimizer
 
 	Channels []chan lp.CCMetric
@@ -103,22 +81,6 @@ func ReadCli() map[string]string {
 	}
 	return m
 }
-
-//func SetLogging(logfile string) error {
-//	var file *os.File
-//	var err error
-//	if logfile != "stderr" {
-//		file, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-//		if err != nil {
-//			log.Fatal(err)
-//			return err
-//		}
-//	} else {
-//		file = os.Stderr
-//	}
-//	log.SetOutput(file)
-//	return nil
-//}
 
 // General shutdownHandler function that gets executed in case of interrupt or graceful shutdownHandler
 func shutdownHandler(config *RuntimeConfig, shutdownSignal chan os.Signal) {
@@ -232,7 +194,7 @@ func mainFunc() int {
 	rcfg.Sync.Add(1)
 	go shutdownHandler(&rcfg, shutdownSignal)
 
-	//RouterToOptimizerChannel := make(chan lp.CCMessage, 200)
+	// RouterToOptimizerChannel := make(chan lp.CCMessage, 200)
 	ReceiversToClusterManagerChannel := make(chan lp.CCMessage, 200)
 	ClusterManagerToSinksChannel := make(chan lp.CCMessage, 200)
 
