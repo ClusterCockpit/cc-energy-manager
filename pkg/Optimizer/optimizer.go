@@ -1,3 +1,7 @@
+// Copyright (C) NHR@FAU, University Erlangen-Nuremberg.
+// All rights reserved. This file is part of cc-energy-manager.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
 package optimizer
 
 import (
@@ -5,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	ccspecs "github.com/ClusterCockpit/cc-backend/pkg/schema"
-	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/cc-message"
+	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
+	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
 )
 
 type optimizerConfig struct {

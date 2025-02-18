@@ -1,5 +1,5 @@
 // Copyright (C) NHR@FAU, University Erlangen-Nuremberg.
-// All rights reserved.
+// All rights reserved. This file is part of cc-energy-manager.
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 package main
@@ -14,13 +14,13 @@ import (
 	"time"
 
 	cmanager "github.com/ClusterCockpit/cc-energy-manager/pkg/ClusterManager"
-	"github.com/ClusterCockpit/cc-metric-collector/receivers"
-	"github.com/ClusterCockpit/cc-metric-collector/sinks"
+	"github.com/ClusterCockpit/cc-lib/receivers"
+	"github.com/ClusterCockpit/cc-lib/sinks"
 
 	// DB added
 	opt "github.com/ClusterCockpit/cc-energy-manager/pkg/Optimizer"
-	lp "github.com/ClusterCockpit/cc-energy-manager/pkg/cc-message"
-	cclog "github.com/ClusterCockpit/cc-metric-collector/pkg/ccLogger"
+	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
+	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
 )
 
 type CentralConfigFile struct {
