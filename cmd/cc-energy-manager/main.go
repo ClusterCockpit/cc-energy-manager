@@ -2,26 +2,6 @@
 // All rights reserved. This file is part of cc-energy-manager.
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
-/*
-package main
-
-import (
-	"fmt"
-
-	"github.com/ClusterCockpit/cc-energy-manager/internal/api"
-	"github.com/ClusterCockpit/cc-metric-collector/collectors"
-)
-
-var likwid_collector collectors.LikwidMetric
-
-func main() {
-
-	if err := api.ApiPrinter("Bla"); err != nil {
-		fmt.Printf("Error: %v\n", err)
-	}
-}
-*/
-
 package main
 
 import (
@@ -34,15 +14,11 @@ import (
 	"time"
 
 	cmanager "github.com/ClusterCockpit/cc-energy-manager/pkg/ClusterManager"
-	"github.com/ClusterCockpit/cc-lib/receivers"
-	"github.com/ClusterCockpit/cc-lib/sinks"
-
-	//	"strings"
-
-	// DB added
 	opt "github.com/ClusterCockpit/cc-energy-manager/pkg/Optimizer"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
+	"github.com/ClusterCockpit/cc-lib/receivers"
+	"github.com/ClusterCockpit/cc-lib/sinks"
 )
 
 type CentralConfigFile struct {

@@ -46,15 +46,6 @@ type gssOptimizerConfig struct {
 	} `json:"borders,omitempty"`
 }
 
-type gssOptimizerMetric struct {
-	types    map[string]float64
-	testtype string
-}
-
-type gssOptimizerHost struct {
-	metrics      map[string]gssOptimizerMetric
-	fudge_factor int
-}
 type gssOptimizerLimits struct {
 	min, max, idle, step int
 }
@@ -74,6 +65,27 @@ type gssOptimizerData struct {
 	powercap                  int
 	calls                     int64
 }
+
+type gssOptimizer struct {
+	optimizer
+	config     gssOptimizerConfig
+	interval   time.Duration
+	data       map[string]gssOptimizerData
+	regionname string
+	region     map[string]gssOptimizerData
+}
+
+type GssOptimizer interface {
+	Init(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob, config json.RawMessage) error
+	AddInput(input chan lp.CCMessage)
+	AddOutput(output chan lp.CCMessage)
+	NewRegion(regionname string)
+	CloseRegion(regionname string)
+	Start()
+	Close()
+}
+
+var GOLDEN_RATIO float64 = (math.Sqrt(5) + 1) / 2
 
 func (d *gssOptimizerData) Update(powercap int, edp float64) int {
 	switch {
@@ -101,7 +113,7 @@ func (d *gssOptimizerData) Update(powercap int, edp float64) int {
 
 func (d *gssOptimizerData) SwitchToNarrowDown() {
 	d.mode = NarrowDown
-	var a int = int(float64((d.tuning_upper_inner_border)-(d.tuning_lower_inner_border)) * GOLDEN_RATIO)
+	a := int(float64((d.tuning_upper_inner_border)-(d.tuning_lower_inner_border)) * GOLDEN_RATIO)
 	d.tuning_lower_outer_border = d.tuning_lower_inner_border - a
 	d.metric_lower_outer_border = 0.0
 	d.tuning_upper_outer_border = d.tuning_upper_inner_border + a
@@ -115,8 +127,8 @@ func (d *gssOptimizerData) NarrowDown() int {
 	if d.metric_upper_inner_border == 0 {
 		return d.tuning_upper_inner_border
 	}
-	var border int = int(float64((d.tuning_upper_outer_border)-(d.tuning_lower_inner_border)) / GOLDEN_RATIO)
-	var new_c int = int((GOLDEN_RATIO - 1) * float64((d.tuning_upper_inner_border)-(d.tuning_lower_inner_border)))
+	border := int(float64((d.tuning_upper_outer_border)-(d.tuning_lower_inner_border)) / GOLDEN_RATIO)
+	new_c := int((GOLDEN_RATIO - 1) * float64((d.tuning_upper_inner_border)-(d.tuning_lower_inner_border)))
 
 	if d.metric_upper_inner_border < d.metric_lower_inner_border && new_c >= d.limits.step {
 		// Search higher
@@ -152,8 +164,8 @@ func (d *gssOptimizerData) NarrowDown() int {
 
 func (d *gssOptimizerData) BroadenDown() int {
 	// Calculate ratio (after shifting borders)
-	var a int = int((GOLDEN_RATIO - 1) * float64(d.tuning_upper_inner_border-d.tuning_lower_inner_border))
-	var b int = int((GOLDEN_RATIO) * float64(d.tuning_upper_outer_border-d.tuning_upper_inner_border))
+	a := int((GOLDEN_RATIO - 1) * float64(d.tuning_upper_inner_border-d.tuning_lower_inner_border))
+	b := int((GOLDEN_RATIO) * float64(d.tuning_upper_outer_border-d.tuning_upper_inner_border))
 	//	limits =
 
 	if d.metric_upper_outer_border < d.metric_upper_inner_border && float64(d.tuning_upper_outer_border)+(GOLDEN_RATIO+1)*float64(b) <= float64(d.limits.max) {
@@ -197,8 +209,8 @@ func (d *gssOptimizerData) BroadenDown() int {
 
 func (d *gssOptimizerData) BroadenUp() int {
 	// Calculate ratio (after shifting borders)
-	var a int = int((GOLDEN_RATIO - 1) * float64((d.tuning_upper_inner_border)-(d.tuning_lower_inner_border)))
-	var b int = int((GOLDEN_RATIO) * float64((d.tuning_lower_inner_border)-(d.tuning_lower_outer_border)))
+	a := int((GOLDEN_RATIO - 1) * float64((d.tuning_upper_inner_border)-(d.tuning_lower_inner_border)))
+	b := int((GOLDEN_RATIO) * float64((d.tuning_lower_inner_border)-(d.tuning_lower_outer_border)))
 	//	limits = self._limits[d.mode]
 	if d.metric_lower_outer_border < d.metric_lower_inner_border && d.tuning_lower_outer_border-int(GOLDEN_RATIO+1)*b >= d.limits.min {
 		// Search lower
@@ -236,28 +248,6 @@ func (d *gssOptimizerData) BroadenUp() int {
 	}
 }
 
-type gssOptimizer struct {
-	optimizer
-	// last     float64
-	config   gssOptimizerConfig
-	cache    map[string]gssOptimizerHost
-	interval time.Duration
-	// edplast  map[string]float64
-	data       map[string]gssOptimizerData
-	regionname string
-	region     map[string]gssOptimizerData
-}
-
-type GssOptimizer interface {
-	Init(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob, config json.RawMessage) error
-	AddInput(input chan lp.CCMessage)
-	AddOutput(output chan lp.CCMessage)
-	NewRegion(regionname string)
-	CloseRegion(regionname string)
-	Start()
-	Close()
-}
-
 func isSocketMetric(metric string) bool {
 	return (strings.Contains(metric, "power") || strings.Contains(metric, "energy") || metric == "mem_bw")
 }
@@ -266,7 +256,9 @@ func isAcceleratorMetric(metric string) bool {
 	return strings.HasPrefix(metric, "acc_")
 }
 
-func (o *gssOptimizer) Init(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob, config json.RawMessage) error {
+func (o *gssOptimizer) Init(ident string, wg *sync.WaitGroup,
+	metadata ccspecs.BaseJob, config json.RawMessage,
+) error {
 	o.ident = fmt.Sprintf("GssOptimizer(%s)", ident)
 	o.globalwg = wg
 	o.metadata = metadata
@@ -301,14 +293,7 @@ func (o *gssOptimizer) Init(ident string, wg *sync.WaitGroup, metadata ccspecs.B
 	}
 	o.interval = t
 
-	o.cache = make(map[string]gssOptimizerHost)
 	for _, r := range metadata.Resources {
-		if _, ok := o.cache[r.Hostname]; !ok {
-			cclog.ComponentDebug(o.ident, "registering host", r.Hostname, "to cache")
-			o.cache[r.Hostname] = gssOptimizerHost{
-				metrics: make(map[string]gssOptimizerMetric),
-			}
-		}
 		if _, ok := o.data[r.Hostname]; !ok {
 			k := gssOptimizerData{
 				calls:                     0,
@@ -328,46 +313,9 @@ func (o *gssOptimizer) Init(ident string, wg *sync.WaitGroup, metadata ccspecs.B
 			// TODO: Ask Host for real limits and stuff
 			o.data[r.Hostname] = k
 		}
-		hdata := o.cache[r.Hostname]
-		for _, m := range o.config.Metrics {
-			if _, ok := hdata.metrics[m]; !ok {
-				if isAcceleratorMetric(m) {
-					hdata.metrics[m] = gssOptimizerMetric{
-						testtype: "accelerator",
-						types:    make(map[string]float64),
-					}
-					mdata := hdata.metrics[m]
-					for _, h := range r.Accelerators {
-						mdata.types[h] = math.NaN()
-					}
-				} else if isSocketMetric(m) {
-					hdata.metrics[m] = gssOptimizerMetric{
-						testtype: "socket",
-						types:    make(map[string]float64),
-					}
-					mdata := hdata.metrics[m]
-					for _, h := range r.HWThreads {
-						// TODO: socket resolve
-						x := fmt.Sprintf("%d", h/64)
-						if _, ok := mdata.types[x]; !ok {
-							mdata.types[x] = math.NaN()
-						}
-					}
-				} else {
-					hdata.metrics[m] = gssOptimizerMetric{
-						testtype: "hwthread",
-						types:    make(map[string]float64),
-					}
-					mdata := hdata.metrics[m]
-					for _, h := range r.HWThreads {
-						mdata.types[fmt.Sprintf("%d", h)] = math.NaN()
-					}
-				}
-				s := fmt.Sprintf("registering metric %s (type %s) to cache host %s", m, hdata.metrics[m].testtype, r.Hostname)
-				cclog.ComponentDebug(o.ident, s)
-			}
-		}
 	}
+
+	o.InitCache(metadata, o.config.optimizerConfig)
 
 	return nil
 }
@@ -386,144 +334,6 @@ func (os *gssOptimizer) Close() {
 	cclog.ComponentDebug(os.ident, "signalling closing")
 	os.globalwg.Done()
 	cclog.ComponentDebug(os.ident, "CLOSE")
-}
-
-func (os *gssOptimizer) AddToCache(m lp.CCMessage) {
-	if hostname, ok := m.GetTag("hostname"); ok {
-		if hdata, ok := os.cache[hostname]; ok {
-			if mdata, ok := hdata.metrics[m.Name()]; ok {
-				if t, ok := m.GetTag("type"); ok && t == mdata.testtype {
-					if tid, ok := m.GetTag("type-id"); ok {
-						if _, ok := mdata.types[tid]; ok {
-							if v, ok := m.GetField("value"); ok {
-								if f64, err := valueToFloat64(v); err == nil {
-									cclog.ComponentDebug(os.ident, "add to cache", m.String())
-									mdata.types[tid] = f64
-								}
-							} else {
-								cclog.ComponentError(os.ident, "no value", m.String())
-							}
-						} // else {
-						//	cclog.ComponentError(os.ident, "unregistered TID", tid)
-						//}
-					} else {
-						cclog.ComponentError(os.ident, "no type-id", m.String())
-					}
-				} else {
-					cclog.ComponentError(os.ident, "no type or not matching with test type", m.String())
-				}
-			} // else {
-			//	cclog.ComponentError(os.ident, "unrequired metric", m.Name())
-			//}
-		} else {
-			cclog.ComponentError(os.ident, "unregistered host", hostname)
-		}
-	} else {
-		cclog.ComponentError(os.ident, "no hostname", m.String())
-	}
-}
-
-var GOLDEN_RATIO float64 = (math.Sqrt(5) + 1) / 2
-
-func valueToFloat64(value interface{}) (float64, error) {
-	switch v := value.(type) {
-	case float64:
-		return v, nil
-	case float32:
-		return float64(v), nil
-	case int64:
-		return float64(v), nil
-	case uint64:
-		return float64(v), nil
-	case int32:
-		return float64(v), nil
-	case uint32:
-		return float64(v), nil
-	case int16:
-		return float64(v), nil
-	case uint16:
-		return float64(v), nil
-	case int8:
-		return float64(v), nil
-	case uint8:
-		return float64(v), nil
-	}
-	return math.NaN(), fmt.Errorf("cannot convert %v to float64", value)
-}
-
-func (os *gssOptimizer) CheckCache() bool {
-	hcount := 0
-hosts_loop:
-	for _, hdata := range os.cache {
-		allmetrics := false
-		mcount := 0
-		for _, mdata := range hdata.metrics {
-			alltypes := false
-			tcount := 0
-			for _, tdata := range mdata.types {
-				if !math.IsNaN(tdata) {
-					tcount++
-				} else {
-					break hosts_loop
-				}
-			}
-			if tcount == len(mdata.types) {
-				alltypes = true
-			}
-			if alltypes {
-				mcount++
-			} else {
-				break hosts_loop
-			}
-		}
-		if mcount == len(hdata.metrics) {
-			allmetrics = true
-		}
-		if allmetrics {
-			hcount++
-		} else {
-			break hosts_loop
-		}
-	}
-	return hcount == len(os.cache)
-}
-
-func (os *gssOptimizer) CalcMetric() (map[string]float64, error) {
-	out := make(map[string]float64)
-	for hostname, hdata := range os.cache {
-		values := make(map[string]float64)
-
-		for metric, mdata := range hdata.metrics {
-			mvalue := 0.0
-			for t, tdata := range mdata.types {
-				v, err := valueToFloat64(tdata)
-				if err == nil && !math.IsNaN(v) {
-					mvalue += v
-				} else {
-					return nil, fmt.Errorf("cannot convert value %v for %s/%s/%s%s to float64", tdata, hostname, metric, mdata.testtype, t)
-				}
-			}
-			values[metric] = mvalue
-		}
-
-		out[hostname] = math.NaN()
-		if instr, ok := values["instructions"]; ok {
-			if energy, ok := values["cpu_energy"]; ok {
-				out[hostname] = (float64(hdata.fudge_factor) + energy) / instr
-			}
-		}
-	}
-	return out, nil
-}
-
-func (os *gssOptimizer) ResetCache() {
-	for _, hdata := range os.cache {
-		for _, mdata := range hdata.metrics {
-			for t := range mdata.types {
-				mdata.types[t] = math.NaN()
-			}
-		}
-	}
 }
 
 func (os *gssOptimizer) Start() {
