@@ -15,35 +15,16 @@ import (
 
 	cmanager "github.com/ClusterCockpit/cc-energy-manager/pkg/ClusterManager"
 	opt "github.com/ClusterCockpit/cc-energy-manager/pkg/Optimizer"
+	cfg "github.com/ClusterCockpit/cc-lib/ccConfig"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
 	"github.com/ClusterCockpit/cc-lib/receivers"
 	"github.com/ClusterCockpit/cc-lib/sinks"
 )
 
-type CentralConfigFile struct {
-	Interval            string `json:"interval"`
-	SinkConfigFile      string `json:"sinks"`
-	ReceiverConfigFile  string `json:"receivers"`
-	OptimizerConfigFile string `json:"optimizer"`
-}
-
-func LoadCentralConfiguration(file string, config *CentralConfigFile) error {
-	configFile, err := os.Open(file)
-	if err != nil {
-		cclog.Error(err.Error())
-		return err
-	}
-	defer configFile.Close()
-	jsonParser := json.NewDecoder(configFile)
-	err = jsonParser.Decode(config)
-	return err
-}
-
 type RuntimeConfig struct {
-	Interval   time.Duration
-	CliArgs    map[string]string
-	ConfigFile CentralConfigFile
+	Interval time.Duration
+	CliArgs  map[string]string
 
 	SinkManager    sinks.SinkManager
 	ReceiveManager receivers.ReceiveManager
@@ -80,22 +61,6 @@ func ReadCli() map[string]string {
 	return m
 }
 
-//func SetLogging(logfile string) error {
-//	var file *os.File
-//	var err error
-//	if logfile != "stderr" {
-//		file, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-//		if err != nil {
-//			log.Fatal(err)
-//			return err
-//		}
-//	} else {
-//		file = os.Stderr
-//	}
-//	log.SetOutput(file)
-//	return nil
-//}
-
 // General shutdownHandler function that gets executed in case of interrupt or graceful shutdownHandler
 func shutdownHandler(config *RuntimeConfig, shutdownSignal chan os.Signal) {
 	defer config.Sync.Done()
@@ -129,6 +94,10 @@ func shutdownHandler(config *RuntimeConfig, shutdownSignal chan os.Signal) {
 	// }
 }
 
+type mainConfig struct {
+	Interval string `json:"interval"`
+}
+
 func mainFunc() int {
 	var err error
 
@@ -144,15 +113,13 @@ func mainFunc() int {
 	}
 
 	// Load and check configuration
-	err = LoadCentralConfiguration(rcfg.CliArgs["configfile"], &rcfg.ConfigFile)
-	if err != nil {
-		cclog.Error("Error reading configuration file ", rcfg.CliArgs["configfile"], ": ", err.Error())
-		return 1
-	}
+	cfg.Init(rcfg.CliArgs["configfile"])
+	var mc mainConfig
+	err = json.Unmarshal(cfg.GetPackageConfig("main"), &mc)
 
 	// Properly use duration parser with inputs like '60s', '5m' or similar
-	if len(rcfg.ConfigFile.Interval) > 0 {
-		t, err := time.ParseDuration(rcfg.ConfigFile.Interval)
+	if len(mc.Interval) > 0 {
+		t, err := time.ParseDuration(mc.Interval)
 		if err != nil {
 			cclog.Error("Configuration value 'interval' no valid duration")
 		}
@@ -163,33 +130,24 @@ func mainFunc() int {
 		}
 	}
 
-	if len(rcfg.ConfigFile.SinkConfigFile) == 0 {
-		cclog.Error("Sink configuration file must be set")
-		return 1
-	}
-	if len(rcfg.ConfigFile.ReceiverConfigFile) == 0 {
-		cclog.Error("Receivers configuration file must be set")
-		return 1
-	}
-	if len(rcfg.ConfigFile.OptimizerConfigFile) == 0 {
-		cclog.Error("Optimizer configuration file must be set")
-		return 1
-	}
-
-	// Set log file
-	if logfile := rcfg.CliArgs["logfile"]; logfile != "stderr" {
-		cclog.SetOutput(logfile)
-	}
+	// Set log level
+	// cclog.Init("debug", true)
 
 	// Create new sink
-	rcfg.SinkManager, err = sinks.New(&rcfg.Sync, rcfg.ConfigFile.SinkConfigFile)
-	if err != nil {
-		cclog.Error(err.Error())
+	if cfg := cfg.GetPackageConfig("sinks"); cfg != nil {
+		rcfg.SinkManager, err = sinks.New(&rcfg.Sync, cfg)
+		if err != nil {
+			cclog.Error(err.Error())
+			return 1
+		}
+	} else {
+		cclog.Error("Sink configuration must be present")
 		return 1
 	}
 
 	// Create new receive manager
-	rcfg.ReceiveManager, err = receivers.New(&rcfg.Sync, rcfg.ConfigFile.ReceiverConfigFile)
+	if cfg := cfg.GetPackageConfig("receivers"); cfg != nil {
+	rcfg.ReceiveManager, err = receivers.New(&rcfg.Sync, cfg)
 	if err != nil {
 		cclog.Error(err.Error())
 		return 1
