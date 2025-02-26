@@ -349,7 +349,7 @@ func (os *gssOptimizer) Start() {
 			// tells whether the control message was processed successfully or
 			// not.
 			// TODO
-			if lp.IsLogMessage(m) {
+			if m.IsLog() {
 				return
 			}
 			// Add message to cache

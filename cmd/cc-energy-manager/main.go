@@ -14,7 +14,6 @@ import (
 	"time"
 
 	cmanager "github.com/ClusterCockpit/cc-energy-manager/pkg/ClusterManager"
-	opt "github.com/ClusterCockpit/cc-energy-manager/pkg/Optimizer"
 	cfg "github.com/ClusterCockpit/cc-lib/ccConfig"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
@@ -23,42 +22,25 @@ import (
 )
 
 type RuntimeConfig struct {
-	Interval time.Duration
-	CliArgs  map[string]string
-
+	Interval       time.Duration
 	SinkManager    sinks.SinkManager
 	ReceiveManager receivers.ReceiveManager
-	// Router         router.MetricRouter
-	ClustManager cmanager.ClusterManager
-	// DB
-	Optimizer opt.Optimizer
-
-	Channels []chan lp.CCMetric
-	Sync     sync.WaitGroup
+	ClustManager   cmanager.ClusterManager
+	Channels       []chan lp.CCMessage
+	Sync           sync.WaitGroup
 }
 
-func ReadCli() map[string]string {
-	var m map[string]string
-	cfg := flag.String("config", "./config.json", "Path to configuration file")
-	logfile := flag.String("log", "stderr", "Path for logfile")
-	once := flag.Bool("once", false, "Run all collectors only once")
-	debug := flag.Bool("debug", false, "Activate debug output")
+var (
+	flagOnce, flagVersion, flagLogDateTime bool
+	flagConfigFile, flagLogLevel           string
+)
+
+func ReadCli() {
+	flag.StringVar(&flagConfigFile, "config", "./config.json", "Path to configuration file")
+	flag.StringVar(&flagLogLevel, "loglevel", "warn", "Sets the logging level: `[debug,info,warn (default),err,fatal,crit]`")
+	flag.BoolVar(&flagLogDateTime, "logdate", false, "Set this flag to add date and time to log messages")
+	flag.BoolVar(&flagOnce, "once", false, "Run all collectors only once")
 	flag.Parse()
-	m = make(map[string]string)
-	m["configfile"] = *cfg
-	m["logfile"] = *logfile
-	if *once {
-		m["once"] = "true"
-	} else {
-		m["once"] = "false"
-	}
-	if *debug {
-		m["debug"] = "true"
-		cclog.SetDebug()
-	} else {
-		m["debug"] = "false"
-	}
-	return m
 }
 
 // General shutdownHandler function that gets executed in case of interrupt or graceful shutdownHandler
@@ -80,18 +62,10 @@ func shutdownHandler(config *RuntimeConfig, shutdownSignal chan os.Signal) {
 		cclog.Debug("Shutdown SinkManager...")
 		config.SinkManager.Close()
 	}
-	// if config.Router != nil {
-	// 	cclog.Debug("Shutdown Router...")
-	// 	config.Router.Close()
-	// }
 	if config.ClustManager != nil {
 		cclog.Debug("Shutdown ClusterManager...")
 		config.ClustManager.Close()
 	}
-	// if config.Optimizer != nil {
-	// 	cclog.Debug("Shutdown Optimizer....")
-	// 	config.Optimizer.Close()
-	// }
 }
 
 type mainConfig struct {
@@ -105,17 +79,25 @@ func mainFunc() int {
 	rcfg := RuntimeConfig{
 		SinkManager:    nil,
 		ReceiveManager: nil,
-		// Router:         nil,
-		// DB added an Optimer to rcfg
-		// Optimizer:    nil,
-		ClustManager: nil,
-		CliArgs:      ReadCli(),
+		ClustManager:   nil,
 	}
 
-	// Load and check configuration
-	cfg.Init(rcfg.CliArgs["configfile"])
+	ReadCli()
+	// Initialize ccLogger
+	cclog.Init(flagLogLevel, flagLogDateTime)
+
+	// Load configuration
+	cfg.Init(flagConfigFile)
 	var mc mainConfig
-	err = json.Unmarshal(cfg.GetPackageConfig("main"), &mc)
+	if cfg := cfg.GetPackageConfig("main"); cfg != nil {
+		err = json.Unmarshal(cfg, &mc)
+		if err != nil {
+			cclog.Error("Cannot parse main config")
+		}
+	} else {
+		cclog.Error("Main configuration must be present")
+		return 1
+	}
 
 	// Properly use duration parser with inputs like '60s', '5m' or similar
 	if len(mc.Interval) > 0 {
@@ -129,9 +111,6 @@ func mainFunc() int {
 			return 1
 		}
 	}
-
-	// Set log level
-	// cclog.Init("debug", true)
 
 	// Create new sink
 	if cfg := cfg.GetPackageConfig("sinks"); cfg != nil {
@@ -147,15 +126,24 @@ func mainFunc() int {
 
 	// Create new receive manager
 	if cfg := cfg.GetPackageConfig("receivers"); cfg != nil {
-	rcfg.ReceiveManager, err = receivers.New(&rcfg.Sync, cfg)
-	if err != nil {
-		cclog.Error(err.Error())
+		rcfg.ReceiveManager, err = receivers.New(&rcfg.Sync, cfg)
+		if err != nil {
+			cclog.Error(err.Error())
+			return 1
+		}
+	} else {
+		cclog.Error("Receiver configuration must be present")
 		return 1
 	}
 
-	rcfg.ClustManager, err = cmanager.NewClusterManager(&rcfg.Sync, rcfg.ConfigFile.OptimizerConfigFile)
-	if err != nil {
-		cclog.Error(err.Error())
+	if cfg := cfg.GetPackageConfig("optimizer"); cfg != nil {
+		rcfg.ClustManager, err = cmanager.NewClusterManager(&rcfg.Sync, cfg)
+		if err != nil {
+			cclog.Error(err.Error())
+			return 1
+		}
+	} else {
+		cclog.Error("Optimizer configuration must be present")
 		return 1
 	}
 

@@ -1,6 +1,8 @@
 {
-    "receivers" : "./receivers.json",
-    "sinks": "./sinks.json",
-    "optimizer": "./optimizer.json",
+  "receivers-file": "./receivers.json",
+  "sinks-file": "./sinks.json",
+  "optimizer-file": "./optimizer.json",
+  "main": {
     "interval": "10s"
+  }
 }

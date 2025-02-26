@@ -5,7 +5,7 @@ go 1.23.4
 toolchain go1.24.0
 
 require (
-	github.com/ClusterCockpit/cc-lib v0.0.0-20250224155550-fa885bbfcd7a
+	github.com/ClusterCockpit/cc-lib v0.0.0-20250225084032-95e1411ac6bf
 	github.com/nats-io/nats.go v1.39.0
 )
 

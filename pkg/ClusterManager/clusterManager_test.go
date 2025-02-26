@@ -15,18 +15,28 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	cclog.Init("debug", false)
 	var wg sync.WaitGroup
 	configFile := "testconfig.json"
-	_, err := NewClusterManager(&wg, configFile)
+	b, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Error(err.Error())
+	}
+	_, err = NewClusterManager(&wg, b)
 	if err != nil {
 		t.Error(err.Error())
 	}
 }
 
 func TestAddCluster(t *testing.T) {
+	cclog.Init("debug", false)
 	var wg sync.WaitGroup
 	configFile := "testconfig.json"
-	cm, err := NewClusterManager(&wg, configFile)
+	b, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Error(err.Error())
+	}
+	cm, err := NewClusterManager(&wg, b)
 	if err != nil {
 		t.Error(err.Error())
 	}
@@ -34,11 +44,15 @@ func TestAddCluster(t *testing.T) {
 }
 
 func TestAddJob(t *testing.T) {
+	cclog.Init("debug", false)
 	var wg sync.WaitGroup
 	configFile := "testconfig.json"
+	b, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Error(err.Error())
+	}
 	jobFile := "testjob.json"
-	cclog.SetDebug()
-	cm, err := NewClusterManager(&wg, configFile)
+	cm, err := NewClusterManager(&wg, b)
 	if err != nil {
 		t.Error(err.Error())
 	}
@@ -61,11 +75,15 @@ func TestAddJob(t *testing.T) {
 }
 
 func TestCloseJob(t *testing.T) {
+	cclog.Init("debug", false)
 	var wg sync.WaitGroup
 	configFile := "testconfig.json"
+	b, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Error(err.Error())
+	}
 	jobFile := "testjob.json"
-	cclog.SetDebug()
-	cm, err := NewClusterManager(&wg, configFile)
+	cm, err := NewClusterManager(&wg, b)
 	if err != nil {
 		t.Error(err.Error())
 	}

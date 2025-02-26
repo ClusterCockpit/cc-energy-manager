@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
@@ -52,13 +51,12 @@ type clusterManager struct {
 	optWg            sync.WaitGroup
 	input            chan lp.CCMessage
 	output           chan lp.CCMessage
-	configFile       string
 	config           clusterManagerConfig
 	hosts2partitions map[string]string
 }
 
 type ClusterManager interface {
-	Init(wg *sync.WaitGroup, configFile string) error
+	Init(wg *sync.WaitGroup, config json.RawMessage) error
 	AddCluster(cluster string)
 	AddInput(input chan lp.CCMessage)
 	AddOutput(output chan lp.CCMessage)
@@ -69,17 +67,12 @@ type ClusterManager interface {
 	Close()
 }
 
-func (cm *clusterManager) Init(wg *sync.WaitGroup, configFile string) error {
+func (cm *clusterManager) Init(wg *sync.WaitGroup, config json.RawMessage) error {
 	cm.wg = wg
 	cm.done = make(chan bool)
 	cm.clusters = make(map[string]clusterEntry)
-	cm.configFile = configFile
 	cm.hosts2partitions = make(map[string]string)
-	f, err := os.ReadFile(cm.configFile)
-	if err != nil {
-		return err
-	}
-	err = json.Unmarshal(f, &cm.config)
+	err := json.Unmarshal(config, &cm.config)
 	if err != nil {
 		return err
 	}
@@ -279,7 +272,8 @@ func (cm *clusterManager) Start() {
 					// cluster and partition it belongs. Then the metric and log message
 					// gets forwarded to all optimizers for the host. This is required for
 					// multi-node jobs.
-					if mtype == lp.CCMSG_TYPE_METRIC || mtype == lp.CCMSG_TYPE_LOG {
+					switch mtype {
+					case lp.CCMSG_TYPE_METRIC, lp.CCMSG_TYPE_LOG:
 						if h, ok := m.GetTag("hostname"); ok {
 							if _, ok := cm.hosts2partitions[h]; ok {
 								// cluster := fmt.Sprintf("%s-%s", c, p)
@@ -292,12 +286,11 @@ func (cm *clusterManager) Start() {
 							}
 						}
 						// We are only interested in two events, job messages and job region messages
-					} else if mtype == lp.CCMSG_TYPE_EVENT {
-						event := lp.CCEvent(m)
+					case lp.CCMSG_TYPE_EVENT:
 						// For job messages, the payload gets decoded to a BaseJob as specified by cc-specification
-						if event.Name() == cm.config.JobEventName {
+						if m.Name() == cm.config.JobEventName {
 							var jdata ccspecs.BaseJob
-							value := lp.GetEventValue(event)
+							value := m.GetEventValue()
 							d := json.NewDecoder(strings.NewReader(value))
 							d.DisallowUnknownFields()
 							if err := d.Decode(&jdata); err == nil {
@@ -318,8 +311,8 @@ func (cm *clusterManager) Start() {
 							// - state (running/completed)
 							// - At least on hwthread ID to receive it by the right optimizer in
 							//   case of shared node jobs
-						} else if event.Name() == cm.config.JobRegionEventName {
-							data := lp.GetEventValue(event)
+						} else if m.Name() == cm.config.JobRegionEventName {
+							data := m.GetEventValue()
 							if h, ok := m.GetTag("hostname"); ok {
 								if _, ok := cm.hosts2partitions[h]; ok {
 									// cluster := fmt.Sprintf("%s-%s", c, p)
@@ -363,10 +356,10 @@ func (cm *clusterManager) Close() {
 	cclog.ComponentDebug("ClusterManager", "CLOSE")
 }
 
-func NewClusterManager(wg *sync.WaitGroup, configFile string) (ClusterManager, error) {
+func NewClusterManager(wg *sync.WaitGroup, config json.RawMessage) (ClusterManager, error) {
 	cm := new(clusterManager)
 
-	err := cm.Init(wg, configFile)
+	err := cm.Init(wg, config)
 	if err != nil {
 		return nil, err
 	}

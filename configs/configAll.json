@@ -1,0 +1,36 @@
+{
+  "receivers": {
+    "testnats": {
+      "type": "nats",
+      "address": "nats-server.example.org",
+      "port": "4222",
+      "subject": "subject"
+    }
+  },
+  "sinks": {
+    "testoutput": {
+      "type": "stdout",
+      "meta_as_tags": []
+    }
+  },
+  "optimizer": {
+    "testcluster": {
+      "interval": "10s",
+      "limits": {
+        "min": 120,
+        "max": 240,
+        "idle": 120,
+        "step": 1
+      },
+      "borders": {
+        "lower_outer": 123,
+        "lower_inner": 567,
+        "upper_outer": 890,
+        "upper_inner": 123
+      }
+    }
+  },
+  "main": {
+    "interval": "10s"
+  }
+}
