@@ -322,7 +322,6 @@ func (o *gssOptimizer) Init(ident string, wg *sync.WaitGroup,
 
 func (os *gssOptimizer) Close() {
 	if os.started {
-
 		cclog.ComponentDebug(os.ident, "Sending Done")
 		os.done <- true
 		<-os.done
