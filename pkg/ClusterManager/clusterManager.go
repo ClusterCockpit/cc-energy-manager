@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	optimizer "github.com/ClusterCockpit/cc-energy-manager/pkg/Optimizer"
@@ -28,7 +27,7 @@ type jobSession struct {
 type clusterEntry struct {
 	name             string
 	hosts2optimizers map[string][]string
-	optimizers       map[string]jobSession // optimizer.Optimizer
+	optimizers       map[string]jobSession
 	maxBudget_watt   float64
 	minBudget_watt   float64
 	curBudget_watt   float64
@@ -39,9 +38,7 @@ type clusterManagerConfig struct {
 		MaxPowerBudget float64 `json:"max_power_budget"`
 		MinPowerBudget float64 `json:"min_power_budget,omitempty"`
 	} `json:"budgets"`
-	Optimizer          map[string]json.RawMessage `json:"optimizer"`
-	JobEventName       string                     `json:"job_event_name"`
-	JobRegionEventName string                     `json:"job_region_event_name"`
+	Optimizer map[string]json.RawMessage `json:"optimizer"`
 }
 
 type clusterManager struct {
@@ -75,6 +72,16 @@ func (cm *clusterManager) Init(wg *sync.WaitGroup, config json.RawMessage) error
 	err := json.Unmarshal(config, &cm.config)
 	if err != nil {
 		return err
+	}
+	// TODO initialize all configured clusters
+	// If it is an unknown cluster, add it.
+	if _, ok := cm.clusters[c]; !ok {
+		cm.AddCluster(c)
+		// It is a non-configured cluster, go to next message
+		if _, ok := cm.clusters[c]; !ok {
+			cclog.ComponentError("ClusterManager", "Invalid cluster", c)
+			continue
+		}
 	}
 
 	return nil
@@ -184,6 +191,7 @@ func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) error {
 		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "New job")
 		cluster := cm.clusters[mycluster]
 		// Only accept jobs for configured <cluster>-<partition> entries
+
 		if osettings, ok := cm.config.Optimizer[mycluster]; ok {
 			cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "New optimizer for job", meta.JobID)
 			// Generate a new optimizer
@@ -243,6 +251,24 @@ func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) error {
 	return nil
 }
 
+func (cm *clusterManager) isSupported(cluster string) bool {
+	if _, ok := cm.clusters[cluster]; !ok {
+		return false
+	}
+
+	return true
+}
+
+func getJob(payload string) (ccspecs.BaseJob, error) {
+	var job ccspecs.BaseJob
+	err := json.Unmarshal([]byte(payload), &job)
+	if err != nil {
+		cclog.ComponentError("ClusterManager", fmt.Sprintf("Failed to decode job payload: %s", payload))
+		return job, err
+	}
+	return job, nil
+}
+
 func (cm *clusterManager) Start() {
 	cm.wg.Add(1)
 	go func() {
@@ -254,75 +280,39 @@ func (cm *clusterManager) Start() {
 				cclog.ComponentDebug("ClusterManager", "DONE")
 				return
 			case m := <-cm.input:
-				// This receives all messages received by the configured receivers
-				// Check the massage type
 				mtype := m.MessageType()
-				// For assigning the messages, the message has to have a "cluster" tag
-				if c, ok := m.GetTag("cluster"); ok {
-					// If it is an unknown cluster, add it.
-					if _, ok := cm.clusters[c]; !ok {
-						cm.AddCluster(c)
-						// It is a non-configured cluster, go to next message
-						if _, ok := cm.clusters[c]; !ok {
-							cclog.ComponentError("ClusterManager", "Invalid cluster", c)
-							continue
-						}
+				if cluster, ok := m.GetTag("cluster"); ok {
+					if !cm.isSupported(cluster) {
+						continue
 					}
-					// For metrics and logs, the hostname is retrieved and to which
-					// cluster and partition it belongs. Then the metric and log message
-					// gets forwarded to all optimizers for the host. This is required for
-					// multi-node jobs.
 					switch mtype {
-					case lp.CCMSG_TYPE_METRIC, lp.CCMSG_TYPE_LOG:
+					case lp.CCMSG_TYPE_METRIC:
+						// forward all metrics to all job optimizers running on this node
 						if h, ok := m.GetTag("hostname"); ok {
-							if _, ok := cm.hosts2partitions[h]; ok {
-								// cluster := fmt.Sprintf("%s-%s", c, p)
-								cluster := c
-								for _, s := range cm.clusters[cluster].hosts2optimizers[h] {
-									if o, ok := cm.clusters[cluster].optimizers[s]; ok {
-										o.input <- m
-									}
+							for _, s := range cm.clusters[cluster].hosts2optimizers[h] {
+								if o, ok := cm.clusters[cluster].optimizers[s]; ok {
+									o.input <- m
 								}
 							}
 						}
-						// We are only interested in two events, job messages and job region messages
 					case lp.CCMSG_TYPE_EVENT:
-						// For job messages, the payload gets decoded to a BaseJob as specified by cc-specification
-						if m.Name() == cm.config.JobEventName {
-							var jdata ccspecs.BaseJob
-							value := m.GetEventValue()
-							d := json.NewDecoder(strings.NewReader(value))
-							d.DisallowUnknownFields()
-							if err := d.Decode(&jdata); err == nil {
-								// Based on the job state, a job session with optimizer is started or closed
-								if jdata.State == "running" {
-									err = cm.NewJob(jdata)
-								} else {
-									err = cm.CloseJob(jdata)
-								}
-								if err != nil {
-									cclog.ComponentError("ClusterManager", "Failed to process job", jdata.JobID, ":", err.Error())
-								}
-							}
-							// TODO: For job region events, the format is currently unclear but there
-							// is currently nothing that publish such events
-							// The message should contain:
-							// - region name
-							// - state (running/completed)
-							// - At least on hwthread ID to receive it by the right optimizer in
-							//   case of shared node jobs
-						} else if m.Name() == cm.config.JobRegionEventName {
-							data := m.GetEventValue()
-							if h, ok := m.GetTag("hostname"); ok {
-								if _, ok := cm.hosts2partitions[h]; ok {
-									// cluster := fmt.Sprintf("%s-%s", c, p)
-									cluster := c
-									for _, s := range cm.clusters[cluster].hosts2optimizers[h] {
-										if o, ok := cm.clusters[cluster].optimizers[s]; ok {
-											o.optimizer.NewRegion(data)
-											// o.optimizer.CloseRegion(data)
-										}
+						if m.Name() == "job" {
+							if f, ok := m.GetTag("function"); ok {
+								switch f {
+								case "start_job":
+									job, err := getJob(m.GetEventValue())
+									if err != nil {
+										cclog.ComponentError("ClusterManager", err.Error())
+										break
 									}
+									err = cm.NewJob(job)
+								case "stop_job":
+									job, err := getJob(m.GetEventValue())
+									if err != nil {
+										cclog.ComponentError("ClusterManager", err.Error())
+										break
+									}
+									err = cm.CloseJob(job)
 								}
 							}
 						}

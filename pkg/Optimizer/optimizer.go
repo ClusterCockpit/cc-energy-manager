@@ -15,11 +15,13 @@ import (
 
 type optimizerConfig struct {
 	Type    string   `json:"type"`
+	Scope   string   `json:"scope"`
 	Metrics []string `json:"metrics"`
 	Control struct {
 		Name string `json:"name"`
 		Type string `json:"type"`
 	} `json:"control"`
+	Interval string `json:"interval"`
 }
 
 type optimizer struct {
@@ -39,8 +41,6 @@ type Optimizer interface {
 	Init(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob, config json.RawMessage) error
 	AddInput(input chan lp.CCMessage)
 	AddOutput(output chan lp.CCMessage)
-	NewRegion(regionname string)
-	CloseRegion(regionname string)
 	Start()
 	Close()
 }

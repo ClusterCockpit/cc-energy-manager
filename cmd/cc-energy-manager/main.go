@@ -5,7 +5,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"os"
 	"os/signal"
@@ -68,10 +67,6 @@ func shutdownHandler(config *RuntimeConfig, shutdownSignal chan os.Signal) {
 	}
 }
 
-type mainConfig struct {
-	Interval string `json:"interval"`
-}
-
 func mainFunc() int {
 	var err error
 
@@ -88,29 +83,6 @@ func mainFunc() int {
 
 	// Load configuration
 	cfg.Init(flagConfigFile)
-	var mc mainConfig
-	if cfg := cfg.GetPackageConfig("main"); cfg != nil {
-		err = json.Unmarshal(cfg, &mc)
-		if err != nil {
-			cclog.Error("Cannot parse main config")
-		}
-	} else {
-		cclog.Error("Main configuration must be present")
-		return 1
-	}
-
-	// Properly use duration parser with inputs like '60s', '5m' or similar
-	if len(mc.Interval) > 0 {
-		t, err := time.ParseDuration(mc.Interval)
-		if err != nil {
-			cclog.Error("Configuration value 'interval' no valid duration")
-		}
-		rcfg.Interval = t
-		if rcfg.Interval == 0 {
-			cclog.Error("Configuration value 'interval' must be greater than zero")
-			return 1
-		}
-	}
 
 	// Create new sink
 	if cfg := cfg.GetPackageConfig("sinks"); cfg != nil {

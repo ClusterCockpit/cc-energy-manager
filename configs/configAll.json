@@ -13,8 +13,23 @@
       "meta_as_tags": []
     }
   },
+  "budgets": {
+    "fritz-main": {
+      "max_power_budget": 2000.0
+    }
+  },
   "optimizer": {
-    "testcluster": {
+    "fritz-main": {
+      "type": "GSS",
+      "scope": "job",
+      "metrics": [
+        "instructions",
+        "cpu_energy"
+      ],
+      "control": {
+        "name": "rapl.pkg_power_limit1",
+        "type": "socket"
+      },
       "interval": "10s",
       "limits": {
         "min": 120,
@@ -30,7 +45,52 @@
       }
     }
   },
-  "main": {
-    "interval": "10s"
+  "fritz-spr": {
+    "type": "GSS",
+    "metrics": [
+      "instructions",
+      "cpu_energy"
+    ],
+    "control": {
+      "name": "rapl.pkg_power_limit1",
+      "type": "socket"
+    },
+    "interval": "10s",
+    "limits": {
+      "min": 120,
+      "max": 350,
+      "idle": 120,
+      "step": 10
+    },
+    "borders": {
+      "lower_outer": 123,
+      "lower_inner": 567,
+      "upper_outer": 890,
+      "upper_inner": 123
+    }
+  },
+  "alex-a100": {
+    "type": "GSS",
+    "metrics": [
+      "kernels",
+      "acc_power"
+    ],
+    "control": {
+      "name": "nvml.power_limit",
+      "type": "gpu"
+    },
+    "interval": "10s",
+    "limits": {
+      "min": 120,
+      "max": 350,
+      "idle": 120,
+      "step": 10
+    },
+    "borders": {
+      "lower_outer": 123,
+      "lower_inner": 567,
+      "upper_outer": 890,
+      "upper_inner": 123
+    }
   }
 }

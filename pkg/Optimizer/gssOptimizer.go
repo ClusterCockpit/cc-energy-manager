@@ -30,8 +30,7 @@ const (
 
 type gssOptimizerConfig struct {
 	optimizerConfig
-	Interval   string `json:"interval"`
-	MaxProcess int    `json:"max_process,omitempty"`
+	MaxProcess int `json:"max_process,omitempty"`
 	Limits     struct {
 		Min  int `json:"minimum"`
 		Max  int `json:"maximum"`
@@ -73,16 +72,6 @@ type gssOptimizer struct {
 	data       map[string]gssOptimizerData
 	regionname string
 	region     map[string]gssOptimizerData
-}
-
-type GssOptimizer interface {
-	Init(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob, config json.RawMessage) error
-	AddInput(input chan lp.CCMessage)
-	AddOutput(output chan lp.CCMessage)
-	NewRegion(regionname string)
-	CloseRegion(regionname string)
-	Start()
-	Close()
 }
 
 var GOLDEN_RATIO float64 = (math.Sqrt(5) + 1) / 2
@@ -341,6 +330,7 @@ func (os *gssOptimizer) Start() {
 	os.ticker = *time.NewTicker(os.interval)
 	os.started = true
 	results := make(map[string][]float64)
+
 	go func(done chan bool, wg *sync.WaitGroup) {
 		toCache := func(m lp.CCMessage) {
 			// If it is a log message, it is likely caused by one of the energy
@@ -381,17 +371,12 @@ func (os *gssOptimizer) Start() {
 				close(done)
 				cclog.ComponentDebug(os.ident, "DONE")
 				return
-			case m := <-os.input:
-				// Receive messages
-				toCache(m)
-				// If there are more messages in the input channel, we process
-				// them directly
+			case <-os.input:
 				for i := 0; i < len(os.input) && i < os.config.MaxProcess; i++ {
-					toCache(<-os.input)
+					aggregate(<-os.input)
 				}
 
 			case <-os.ticker.C:
-				// Run the optimizer at each ticker tick
 				// Iterate over the host and their result lists
 				for h, rlist := range results {
 					if len(rlist) == 0 {
@@ -402,52 +387,29 @@ func (os *gssOptimizer) Start() {
 					// Delete the result list of the host
 					results[h] = results[h][:0]
 					// Run the calculator
-					if os.regionname != "" {
-						// Host executes a code region
-						d := os.region[h]
-						if os.region[h].edplast > 0 && d.calls >= 2 {
-							cclog.ComponentDebug(os.ident, "Analyse cache with GSS for region", os.regionname)
-							d.powercap = d.Update(d.powercap, median)
-							d.edplast = median
-							out, err := lp.NewPutControl(os.config.Control.Name, map[string]string{
-								"hostname": h,
-								"type":     os.config.Control.Type,
-								"type-id":  "0",
-							}, nil, fmt.Sprintf("%d", d.powercap), time.Now())
-							if err == nil {
-								cclog.ComponentDebug(os.ident, out.String())
-								os.output <- out
-							}
-						} else {
-							cclog.ComponentDebug(os.ident, "Saving EDP for next round for region", os.regionname)
-							d.edplast = median
+					d := os.data[h]
+
+					if os.data[h].edplast > 0 && d.calls >= 2 {
+						cclog.ComponentDebug(os.ident, "Analyse cache with GSS")
+						d.powercap = d.Update(d.powercap, median)
+						d.edplast = median
+						cclog.ComponentDebug(os.ident, "New powercap", d.powercap)
+						out, err := lp.NewPutControl(os.config.Control.Name, map[string]string{
+							"hostname": h,
+							"type":     os.config.Control.Type,
+							"type-id":  "0",
+						}, nil, fmt.Sprintf("%d", d.powercap), time.Now())
+						if err == nil {
+							cclog.ComponentDebug(os.ident, out.String())
+							os.output <- out
 						}
-						d.calls++
-						os.region[h] = d
 					} else {
-						// Host is not in a region
-						d := os.data[h]
-						if os.data[h].edplast > 0 && d.calls >= 2 {
-							cclog.ComponentDebug(os.ident, "Analyse cache with GSS")
-							d.powercap = d.Update(d.powercap, median)
-							d.edplast = median
-							cclog.ComponentDebug(os.ident, "New powercap", d.powercap)
-							out, err := lp.NewPutControl(os.config.Control.Name, map[string]string{
-								"hostname": h,
-								"type":     os.config.Control.Type,
-								"type-id":  "0",
-							}, nil, fmt.Sprintf("%d", d.powercap), time.Now())
-							if err == nil {
-								cclog.ComponentDebug(os.ident, out.String())
-								os.output <- out
-							}
-						} else {
-							cclog.ComponentDebug(os.ident, "Saving EDP for next round")
-							d.edplast = median
-						}
-						d.calls++
-						os.data[h] = d
+						cclog.ComponentDebug(os.ident, "Saving EDP for next round")
+						d.edplast = median
 					}
+
+					d.calls++
+					os.data[h] = d
 				}
 			}
 		}
@@ -455,7 +417,11 @@ func (os *gssOptimizer) Start() {
 	cclog.ComponentDebug(os.ident, "START")
 }
 
-func NewGssOptimizer(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob, config json.RawMessage) (GssOptimizer, error) {
+func NewGssOptimizer(ident string,
+	wg *sync.WaitGroup,
+	metadata ccspecs.BaseJob,
+	config json.RawMessage,
+) (*gssOptimizer, error) {
 	o := new(gssOptimizer)
 
 	err := o.Init(ident, wg, metadata, config)
@@ -466,73 +432,4 @@ func NewGssOptimizer(ident string, wg *sync.WaitGroup, metadata ccspecs.BaseJob,
 	wg.Add(1)
 
 	return o, err
-}
-
-func (gss *gssOptimizer) NewRegion(regionname string) {
-	if gss.regionname != "" {
-		cclog.ComponentError(gss.ident, "Optimizer already working on region", gss.regionname, ", close first")
-		return
-	}
-	cclog.ComponentDebug(gss.ident, "New region", regionname)
-	gss.regionname = regionname
-	gss.ResetCache()
-
-	for h, hdata := range gss.data {
-		cclog.ComponentDebug(gss.ident, "Init region data for host", h)
-		gss.region[h] = gssOptimizerData{
-			calls:                     0,
-			tuning_lower_outer_border: hdata.tuning_lower_outer_border,
-			tuning_lower_inner_border: hdata.tuning_lower_inner_border,
-			tuning_upper_outer_border: hdata.tuning_upper_outer_border,
-			tuning_upper_inner_border: hdata.tuning_upper_inner_border,
-			metric_lower_outer_border: hdata.metric_lower_outer_border,
-			metric_lower_inner_border: hdata.metric_lower_inner_border,
-			metric_upper_outer_border: hdata.metric_upper_outer_border,
-			metric_upper_inner_border: hdata.metric_upper_inner_border,
-			mode:                      hdata.mode,
-			edplast:                   hdata.edplast,
-			powercap:                  hdata.powercap,
-			limits: gssOptimizerLimits{
-				min:  hdata.limits.min,
-				max:  hdata.limits.max,
-				idle: hdata.limits.idle,
-				step: hdata.limits.step,
-			},
-		}
-	}
-}
-
-func (gss *gssOptimizer) CloseRegion(regionname string) {
-	if gss.regionname == "" {
-		cclog.ComponentError(gss.ident, "Optimizer not working on region", regionname, ", cannot close")
-		return
-	}
-	if gss.regionname != regionname {
-		cclog.ComponentError(gss.ident, "Optimizer working on region", gss.regionname, ", cannot close", regionname)
-		return
-	}
-	cclog.ComponentDebug(gss.ident, "Close region", regionname)
-	gss.regionname = ""
-	for h, hdata := range gss.region {
-		cclog.ComponentDebug(gss.ident, "Copy data for host", h, "to general GSS")
-		gss.data[h] = gssOptimizerData{
-			tuning_lower_outer_border: hdata.tuning_lower_outer_border,
-			tuning_lower_inner_border: hdata.tuning_lower_inner_border,
-			tuning_upper_outer_border: hdata.tuning_upper_outer_border,
-			tuning_upper_inner_border: hdata.tuning_upper_inner_border,
-			metric_lower_outer_border: hdata.metric_lower_outer_border,
-			metric_lower_inner_border: hdata.metric_lower_inner_border,
-			metric_upper_outer_border: hdata.metric_upper_outer_border,
-			metric_upper_inner_border: hdata.metric_upper_inner_border,
-			mode:                      hdata.mode,
-			edplast:                   hdata.edplast,
-			powercap:                  hdata.powercap,
-			limits: gssOptimizerLimits{
-				min:  hdata.limits.min,
-				max:  hdata.limits.max,
-				idle: hdata.limits.idle,
-				step: hdata.limits.step,
-			},
-		}
-	}
 }
