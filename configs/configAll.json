@@ -22,10 +22,11 @@
     "fritz-main": {
       "type": "GSS",
       "scope": "job",
-      "metrics": [
-        "instructions",
-        "cpu_energy"
-      ],
+      "aggregator": {
+        "type": "last",
+        "energy": "cpu_energy",
+        "instructions": "instructions"
+      },
       "control": {
         "name": "rapl.pkg_power_limit1",
         "type": "socket"
