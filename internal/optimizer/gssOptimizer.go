@@ -6,12 +6,10 @@ package optimizer
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
-	"strings"
-	"sync"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
-	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
 )
 
 type Mode int
@@ -24,227 +22,209 @@ const (
 )
 
 type gssOptimizerConfig struct {
-	optimizerConfig
-	MaxProcess int `json:"max_process,omitempty"`
-	Limits     struct {
-		Min  int `json:"minimum"`
-		Max  int `json:"maximum"`
-		Step int `json:"step"`
-		Idle int `json:"idle"`
-	} `json:"limits"`
+	Tol     int `json:"tol"`
 	Borders struct {
 		Lower_outer int `json:"lower_outer"`
-		Lower_inner int `json:"lower_inner"`
 		Upper_outer int `json:"upper_outer"`
-		Upper_inner int `json:"upper_inner"`
 	} `json:"borders,omitempty"`
 }
 
-type gssOptimizerLimits struct {
-	min, max, idle, step int
-}
-
 type gssOptimizer struct {
-	fxa      int
-	fxb      int
-	fxc      int
-	fxd      int
-	xa       float64 // outer interval
-	xb       float64 // outer interval
-	xc       float64 // inner interval
-	xd       float64 // inner interval
-	mode     Mode
-	limits   gssOptimizerLimits
-	edplast  float64
-	previous int
-	calls    int64
+	fa    float64
+	fb    float64
+	fc    float64
+	fd    float64
+	a     float64 // outer interval
+	b     float64 // outer interval
+	c     float64 // inner interval
+	d     float64 // inner interval
+	h     float64 // outer interval distance
+	tol   float64
+	mode  Mode
+	probe float64
 }
 
-var GOLDEN_RATIO float64 = (math.Sqrt(5) + 1) / 2
+var (
+	sqrt5   = math.Sqrt(5)
+	phi     = (sqrt5 + 1) / 2 //# phi
+	invphi  = (sqrt5 - 1) / 2 //# 1/phi
+	invphi2 = (3 - sqrt5) / 2 //# 1/phi^2
+	nan     = math.NaN()
+)
 
-func (d *gssOptimizer) Update(input float64) (output int) {
+func (o *gssOptimizer) Start(fx float64) (x int, ok bool) {
+	o.h = o.b - o.a
+
+	if o.d == o.probe {
+		cclog.Debugf("Set fd to %f", fx)
+		o.fd = fx
+	}
+	if o.c == o.probe {
+		cclog.Debugf("Set fc to %f", fx)
+		o.fc = fx
+	}
+
+	if math.IsNaN(o.fc) {
+		o.c = o.a + invphi2*o.h
+		o.probe = o.c
+		x = int(o.probe)
+		cclog.Debugf("Set probe c to %d", x)
+		return x, false
+	}
+	if math.IsNaN(o.fd) {
+		o.d = o.b - invphi2*o.h
+		o.probe = o.d
+		x = int(o.probe)
+		cclog.Debugf("Set probe d to %d", x)
+		return x, false
+	}
+
+	cclog.Debugf("Startup finished: c(%f):%f d(%f):%f", o.c, o.fc, o.d, o.fd)
+	x = o.NarrowDown()
+	return x, true
+}
+
+func (o *gssOptimizer) Update(fx float64) (x int) {
 	switch {
-	case d.fxa == d.previous:
-		d.xa = input
-	case d.fxc == d.previous:
-		d.xc = input
-	case d.fxd == d.previous:
-		d.xd = input
-	case d.fxb == d.previous:
-		d.xb = input
+	case o.c == o.probe:
+		cclog.Debugf("Set fc to %f", fx)
+		o.fc = fx
+	case o.d == o.probe:
+		cclog.Debugf("Set fd to %f", fx)
+		o.fd = fx
+	case o.a == o.probe:
+		cclog.Debugf("Set fa to %f", fx)
+		o.fa = fx
+	case o.b == o.probe:
+		cclog.Debugf("Set fb to %f", fx)
+		o.fb = fx
 	}
+	cclog.Debugf("Interval distance %f", o.h)
 
-	switch d.mode {
+	switch o.mode {
 	case NarrowDown:
-		output = d.NarrowDown()
+		return o.NarrowDown()
+
 	case BroadenDown:
-		output = d.BroadenDown()
+		return o.BroadenDown()
+
 	default:
-		output = d.BroadenUp()
+		return o.BroadenUp()
 	}
-
-	d.previous = output
-	return output
 }
 
-func (d *gssOptimizer) SwitchToNarrowDown() {
-	d.mode = NarrowDown
-	a := int(float64((d.fxd)-(d.fxc)) * GOLDEN_RATIO)
-	d.fxa = d.fxc - a
-	d.xa = 0.0
-	d.fxb = d.fxd + a
-	d.xb = 0.0
+func (o *gssOptimizer) DumpState(position string) {
+	cclog.Debugf("State at %s", position)
+	cclog.Debugf("\tfa: %f", o.fa)
+	cclog.Debugf("\tfc: %f", o.fc)
+	cclog.Debugf("\tfd: %f", o.fd)
+	cclog.Debugf("\tfb: %f", o.fb)
 }
 
-func (d *gssOptimizer) NarrowDown() int {
-	if d.xc == 0 {
-		return d.fxc
-	}
-	if d.xd == 0 {
-		return d.fxd
-	}
-	border := int(float64((d.fxb)-(d.fxc)) / GOLDEN_RATIO)
-	new_c := int((GOLDEN_RATIO - 1) * float64((d.fxd)-(d.fxc)))
-
-	if d.xd < d.xc && new_c >= d.limits.step {
-		// Search higher
-		d.fxa = d.fxc
-		d.xa = d.xc
-		d.fxc = d.fxd
-		d.xc = d.xd
-		d.fxd = d.fxa + border
-		return d.fxd
-	} else if d.xc <= d.xd && new_c >= d.limits.step {
-		// Search lower
-		d.fxb = d.fxd
-		d.xb = d.xd
-		d.fxd = d.fxc
-		d.xd = d.xc
-		d.fxc = d.fxb - border
-		return d.fxc
+func (o *gssOptimizer) NarrowDown() int {
+	if o.fc < o.fd {
+		if o.h < o.tol { // expand toward lower: c becomes new d and a becomes new c, new probe a
+			o.h = o.h * phi
+			o.d, o.fd, o.c, o.fc, o.a, o.fa = o.c, o.fc, o.a, nan, o.b-o.h, nan
+			o.mode = BroadenDown
+			o.probe = o.a
+			cclog.Debugf("\tSwitch to broaden down: %f", o.probe)
+		} else { // contract towards lower:  d becomes new b and c becomes new d, new probe c
+			o.h = o.h * invphi
+			o.b, o.c, o.fc, o.d, o.fd = o.d, o.a+invphi2*o.h, nan, o.c, o.fc
+			o.probe = o.c
+			cclog.Debugf("\tsearch lower: try next %f", o.probe)
+		}
 	} else {
-		// Terminate narrow-down if step is too small
-		d.fxb = d.fxd + new_c
-		d.xb = 0.0
-		d.fxa = d.fxc - new_c
-		d.xa = 0.0
-		if d.mode == BroadenUp {
-			d.mode = BroadenDown
-			return d.fxa
-		} else {
-			d.mode = BroadenUp
-			return d.fxb
+		if o.h < o.tol { // expand toward higher: d becomes new c and b becomes new d, new probe b
+			o.h = o.h * phi
+			o.c, o.fc, o.d, o.fd, o.b, o.fb = o.d, o.fd, o.b, nan, o.a+o.h, nan
+			o.mode = BroadenUp
+			o.probe = o.b
+			cclog.Debugf("\tSwitch to broaden up: %f", o.probe)
+		} else { // contract towards higher:  c becomes new a and d becomes new c
+			o.h = o.h * invphi
+			o.a, o.c, o.fc, o.d, o.fd = o.c, o.d, o.fd, o.b-invphi2*o.h, nan
+			o.probe = o.d
+			cclog.Debugf("\tsearch higher: try next %f", o.probe)
 		}
 	}
+	return int(o.probe)
 }
 
-func (d *gssOptimizer) BroadenDown() int {
-	// Calculate ratio (after shifting borders)
-	a := int((GOLDEN_RATIO - 1) * float64(d.fxd-d.fxc))
-	b := int((GOLDEN_RATIO) * float64(d.fxb-d.fxd))
-	//	limits =
-
-	if d.xb < d.xd && float64(d.fxb)+(GOLDEN_RATIO+1)*float64(b) <= float64(d.limits.max) {
-		// Search higher
-		d.fxd = d.fxb
-		d.xd = d.xb
-		d.fxb = d.fxd + a
-		return d.fxb
-	} else if d.xb < d.xd && b-((d.fxb)-(d.fxd)) >= d.limits.step {
-		// Nearing limits -> reset exponential growth
-		d.fxc = d.fxd
-		d.xc = d.xd
-		d.fxd = d.fxb
-		d.xd = d.xb
-		d.fxa = d.fxd - b
-		d.xa = 0.0
-		d.fxb = d.fxc + b
-		return d.fxb
-	} else if d.xd <= d.xb && float64((d.fxb)-(d.fxd))/(GOLDEN_RATIO+1) >= float64(d.limits.step) {
-		// Moved past sweetspot -> narrow-down (optimized)
-		a = int((GOLDEN_RATIO - 1) * float64((d.fxb)-(d.fxd)))
-		d.fxc = d.fxd
-		d.xc = d.xd
-		d.fxd = d.fxb - a
-		d.SwitchToNarrowDown()
-		return d.fxd
+func (o *gssOptimizer) BroadenDown() int {
+	if math.IsNaN(o.fc) { // treat first step separately
+		o.h = o.h * phi
+		o.d, o.fd, o.c, o.fc, o.a, o.fa = o.c, o.fc, o.a, o.fa, o.b-o.h, nan
+		o.probe = o.a
+		cclog.Debugf("\tinitial broaden down: %f", o.probe)
 	} else {
-		// Moved past sweetspot or hitting step size
-		if ((d.fxb) - (d.fxd)) > d.limits.step {
-			// Move lower border up, if step size allows it
-			// This speeds up the narrow-down
-			d.fxc = d.fxd
-			d.xc = d.xd
-			d.fxd = d.fxb
-			d.xd = d.xb
+		if o.fa < o.fc { // minimum still outside, further expand
+			o.h = o.h * phi
+			o.d, o.fd, o.c, o.fc, o.a, o.fa = o.c, nan, o.a, o.fa, o.b-o.h, nan
+			o.probe = o.a
+			cclog.Debugf("\tbroaden down: %f", o.probe)
+		} else { // captured minimum, switch to NarrowDown downwards
+			o.h = o.h * invphi
+			o.b, o.c, o.fc, o.d, o.fd, o.fa, o.fb = o.d, o.a+invphi2*o.h, nan, o.c, o.fc, nan, nan
+			o.mode = NarrowDown
+			o.probe = o.c
+			cclog.Debugf("\tSwitch to Narrow down from Broaden down: %f", o.probe)
 		}
-		d.SwitchToNarrowDown()
-		return d.fxc
 	}
+
+	return int(o.probe)
 }
 
-func (d *gssOptimizer) BroadenUp() int {
-	// Calculate ratio (after shifting borders)
-	a := int((GOLDEN_RATIO - 1) * float64((d.fxd)-(d.fxc)))
-	b := int((GOLDEN_RATIO) * float64((d.fxc)-(d.fxa)))
-	//	limits = self._limits[d.mode]
-	if d.xa < d.xc && d.fxa-int(GOLDEN_RATIO+1)*b >= d.limits.min {
-		// Search lower
-		d.fxc = d.fxa
-		d.xc = d.xa
-		d.fxa = d.fxc - a
-		d.fxd = d.fxc
-		d.xd = d.xc
-		d.fxc = d.fxa
-		d.xc = d.xa
-		d.fxb = d.fxc + b
-		d.xb = 0.0
-		d.fxa = d.fxd - b
-		return d.fxa
-	} else if d.xc <= d.xa && float64((d.fxc)-(d.fxa))/(GOLDEN_RATIO+1) >= float64(d.limits.step) {
-		// Moved past sweetspot -> narrow-down (optimized)
-		a = int((GOLDEN_RATIO - 1) * float64((d.fxc)-(d.fxa)))
-		d.fxd = d.fxc
-		d.xd = d.xc
-		d.fxc = d.fxa + a
-		d.SwitchToNarrowDown()
-		return d.fxc
+func (o *gssOptimizer) BroadenUp() int {
+	if math.IsNaN(o.fd) { // treat first step separately
+		o.h = o.h * phi
+		o.c, o.fc, o.d, o.fd, o.b, o.fb = o.d, o.fd, o.b, o.fb, o.a+o.h, nan
+		o.probe = o.b
+		cclog.Debugf("\tbroaden up: %f", o.probe)
 	} else {
-		// Moved past sweetspot or hitting step size
-		if (d.fxc)-(d.fxa) > d.limits.step {
-			// Move upper border down, if step size allows it
-			// This speeds up the narrow-down
-			d.fxd = d.fxc
-			d.xd = d.xc
-			d.fxc = d.fxa
-			d.xc = d.xa
+		if o.fb < o.fd { // minimum still outside, further expand
+			o.h = o.h * phi
+			o.c, o.fc, o.d, o.fd, o.b, o.fb = o.d, nan, o.b, o.fb, o.a+o.h, nan
+			o.probe = o.b
+			cclog.Debugf("\tbroaden up: %f", o.probe)
+		} else { // captured minimum, switch to NarrowDown upwards
+			o.h = o.h * invphi
+			o.a, o.d, o.fc, o.c, o.fc, o.fa, o.fb = o.c, o.a+invphi2*o.h, nan, o.d, o.fd, nan, nan
+			o.mode = NarrowDown
+			o.probe = o.b
+			cclog.Debugf("\tSwitch to Narrow down from Broaden up: %f", o.probe)
 		}
-		d.SwitchToNarrowDown()
-		return d.fxd
 	}
+
+	return int(o.probe)
 }
 
-func isSocketMetric(metric string) bool {
-	return (strings.Contains(metric, "power") || strings.Contains(metric, "energy") || metric == "mem_bw")
-}
+func NewGssOptimizer(config json.RawMessage) (*gssOptimizer, error) {
+	var c gssOptimizerConfig
+	c.Tol = 10
+	c.Borders.Lower_outer = 30
+	c.Borders.Upper_outer = 800
 
-func isAcceleratorMetric(metric string) bool {
-	return strings.HasPrefix(metric, "acc_")
-}
-
-func NewGssOptimizer(ident string,
-	wg *sync.WaitGroup,
-	metadata ccspecs.BaseJob,
-	config json.RawMessage,
-) (*gssOptimizer, error) {
-	o := new(gssOptimizer)
-
-	err := o.Init(ident, wg, metadata, config)
+	err := json.Unmarshal(config, &c)
 	if err != nil {
-		cclog.ComponentError("failed to initialize GssOptimizer")
+		err := fmt.Errorf("failed to parse config: %v", err.Error())
+		cclog.ComponentError("GSS", err.Error())
 		return nil, err
 	}
-	wg.Add(1)
+	o := gssOptimizer{
+		a:     float64(c.Borders.Lower_outer),
+		b:     float64(c.Borders.Upper_outer),
+		c:     nan,
+		d:     nan,
+		fa:    nan,
+		fb:    nan,
+		fc:    nan,
+		fd:    nan,
+		mode:  NarrowDown,
+		probe: nan,
+		tol:   float64(c.Tol),
+	}
 
-	return o, err
+	return &o, err
 }

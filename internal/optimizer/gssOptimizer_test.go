@@ -7,41 +7,21 @@ package optimizer
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"sync"
 	"testing"
-	"time"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
-	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
-	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
 )
 
 func TestInit(t *testing.T) {
-	var wg sync.WaitGroup
-	var job ccspecs.BaseJob
-	testfile := "testjob.json"
 	testconfig := `{
-		"metrics" : [
-			"instructions",
-			"cpu_energy"
-		],
-		"interval" : "5s"
-	}`
-	jobFile, err := os.Open(testfile)
-	if err != nil {
-		t.Errorf("failed to open %s: %v", testfile, err.Error())
-		return
-	}
-	defer jobFile.Close()
-	jsonParser := json.NewDecoder(jobFile)
-	err = jsonParser.Decode(&job)
-	if err != nil {
-		t.Errorf("failed to decode %s: %v", testfile, err.Error())
-		return
-	}
+      "tol": 10,
+      "borders": {
+        "lower_outer": 123,
+        "upper_outer": 890
+      }}`
+
 	cclog.Init("debug", false)
-	_, err = NewGssOptimizer("foobar", &wg, job, json.RawMessage(testconfig))
+	_, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
 		return
@@ -49,158 +29,217 @@ func TestInit(t *testing.T) {
 }
 
 func TestStart(t *testing.T) {
-	var wg sync.WaitGroup
-	var job ccspecs.BaseJob
-	testfile := "testjob.json"
 	testconfig := `{
-		"metrics" : [
-			"instructions",
-			"cpu_energy"
-		],
-		"interval" : "5s"
-	}`
-	jobFile, err := os.Open(testfile)
-	if err != nil {
-		t.Errorf("failed to open %s: %v", testfile, err.Error())
-		return
-	}
-	defer jobFile.Close()
-	jsonParser := json.NewDecoder(jobFile)
-	err = jsonParser.Decode(&job)
-	if err != nil {
-		t.Errorf("failed to decode %s: %v", testfile, err.Error())
-		return
-	}
+      "tol": 10,
+      "borders": {
+        "lower_outer": 60,
+        "upper_outer": 600
+      }}`
+
 	cclog.Init("debug", false)
-	o, err := NewGssOptimizer("foobar", &wg, job, json.RawMessage(testconfig))
+	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
 		return
 	}
-	o.Start()
 
-	o.Close()
+	f := func(v int) float64 {
+		x := float64(v)
+		y := 0.006*x*x - 2.9*x + 400
+
+		return y
+	}
+
+	in := 400.0
+	var out int
+	ok := false
+
+	for !ok {
+		out, ok = o.Start(in)
+		in = f(out)
+	}
+	// t.Errorf("failed to init GssOptimizer")
 }
 
-func TestStartInput(t *testing.T) {
-	var wg sync.WaitGroup
-	var job ccspecs.BaseJob
-	testfile := "testjob.json"
+func TestOptimize(t *testing.T) {
 	testconfig := `{
- 		"metrics" : [
- 			"instructions",
- 			"cpu_energy"
- 		],
- 		"interval" : "5s"
- 	}`
-	testtags := map[string]string{
-		"type":     "hwthread",
-		"hostname": "a0805",
-		"cluster":  "testcluster",
-	}
-	testmeta := map[string]string{
-		"source": "testsource",
-		"unit":   "Joules",
-	}
-	jobFile, err := os.Open(testfile)
-	if err != nil {
-		t.Errorf("failed to open %s: %v", testfile, err.Error())
-		return
-	}
-	defer jobFile.Close()
-	jsonParser := json.NewDecoder(jobFile)
-	err = jsonParser.Decode(&job)
-	if err != nil {
-		t.Errorf("failed to decode %s: %v", testfile, err.Error())
-		return
-	}
+       "tol": 2,
+       "borders": {
+         "lower_outer": 60,
+         "upper_outer": 600
+       }}`
+
 	cclog.Init("debug", false)
-	o, err := NewGssOptimizer("foobar", &wg, job, json.RawMessage(testconfig))
+	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
 		return
 	}
-	input := make(chan lp.CCMessage)
-	o.AddInput(input)
-	o.Start()
 
-	for i := 0; i < 12; i++ {
-		for c := 0; c < 127; c++ {
-			instr, _ := lp.NewMetric("instructions", testtags, testmeta, 1000.0*float64(i*c+1), time.Now())
-			instr.AddTag("type-id", fmt.Sprintf("%d", c))
-			input <- instr
-		}
-		for c := 0; c < 2; c++ {
-			cpu_energy, _ := lp.NewMetric("cpu_energy", testtags, testmeta, 500*float64(i*c+1), time.Now())
-			cpu_energy.AddTag("type", "socket")
-			cpu_energy.AddTag("type-id", fmt.Sprintf("%d", c))
-			input <- cpu_energy
-		}
-		time.Sleep(time.Second)
+	f := func(v int) float64 {
+		x := float64(v)
+		y := 0.006*x*x - 2.9*x + 400
+
+		return y
 	}
 
-	o.Close()
+	in := 400.0
+	var out int
+	ok := false
+
+	for !ok {
+		out, ok = o.Start(in)
+		in = f(out)
+	}
+	i := 0
+	fmt.Printf("it %d in: %f out: %d\n", i, in, out)
+
+	for {
+		if i > 20 {
+			t.Errorf("failed to find minimum")
+			return
+		}
+
+		out = o.Update(in)
+		in = f(out)
+		fmt.Printf("it %d in: %f out: %d\n", i, in, out)
+
+		if out > 243 && out < 246 {
+			break
+		}
+
+		i++
+	}
+
+	// if out > 100 {
+	// 	t.Errorf("failed to calculate minimum")
+	// }
 }
 
-func TestStartInputRegion(t *testing.T) {
-	var wg sync.WaitGroup
-	var job ccspecs.BaseJob
-	testfile := "testjob.json"
-	regionname := "foobar"
+func TestMovingMinimum(t *testing.T) {
 	testconfig := `{
- 		"metrics" : [
- 			"instructions",
- 			"cpu_energy"
- 		],
- 		"interval" : "5s"
- 	}`
-	testtags := map[string]string{
-		"type":     "hwthread",
-		"hostname": "a0805",
-		"cluster":  "testcluster",
-	}
-	testmeta := map[string]string{
-		"source": "testsource",
-		"unit":   "Joules",
-	}
-	jobFile, err := os.Open(testfile)
-	if err != nil {
-		t.Errorf("failed to open %s: %v", testfile, err.Error())
-		return
-	}
-	defer jobFile.Close()
-	jsonParser := json.NewDecoder(jobFile)
-	err = jsonParser.Decode(&job)
-	if err != nil {
-		t.Errorf("failed to decode %s: %v", testfile, err.Error())
-		return
-	}
+       "tol": 2,
+       "borders": {
+         "lower_outer": 60,
+         "upper_outer": 600
+       }}`
+
 	cclog.Init("debug", false)
-	o, err := NewGssOptimizer("foobar", &wg, job, json.RawMessage(testconfig))
+	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
 		return
 	}
-	input := make(chan lp.CCMessage)
-	o.AddInput(input)
-	o.Start()
-	o.NewRegion(regionname)
 
-	for i := 0; i < 12; i++ {
-		for c := 0; c < 127; c++ {
-			instr, _ := lp.NewMetric("instructions", testtags, testmeta, 1000.0*float64(i*c+1), time.Now())
-			instr.AddTag("type-id", fmt.Sprintf("%d", c))
-			input <- instr
-		}
-		for c := 0; c < 2; c++ {
-			cpu_energy, _ := lp.NewMetric("cpu_energy", testtags, testmeta, 500*float64(i*c+1), time.Now())
-			cpu_energy.AddTag("type", "socket")
-			cpu_energy.AddTag("type-id", fmt.Sprintf("%d", c))
-			input <- cpu_energy
-		}
-		time.Sleep(time.Second)
+	f := func(v int) float64 {
+		x := float64(v)
+		y := 0.006*x*x - 2.9*x + 400
+
+		return y
 	}
-	o.CloseRegion(regionname)
+	fn := func(v int) float64 {
+		x := float64(v)
+		y := 0.004*x*x - 2.9*x + 700
 
-	o.Close()
+		return y
+	}
+
+	in := 400.0
+	var out int
+	ok := false
+
+	for !ok {
+		out, ok = o.Start(in)
+		in = f(out)
+	}
+	i := 0
+	fmt.Printf("it %d in: %f out: %d\n", i, in, out)
+
+	for {
+		if i > 40 {
+			t.Errorf("failed to find minimum")
+			return
+		}
+
+		out = o.Update(in)
+		if i < 12 {
+			in = f(out)
+		} else {
+			in = fn(out)
+		}
+		fmt.Printf("it %d in: %f out: %d\n", i, in, out)
+
+		if out > 395 && out < 405 {
+			break
+		}
+
+		i++
+	}
+
+	// if out > 100 {
+	// 	t.Errorf("failed to calculate minimum")
+	// }
+}
+
+func TestMovingTwice(t *testing.T) {
+	testconfig := `{
+       "tol": 2,
+       "borders": {
+         "lower_outer": 60,
+         "upper_outer": 600
+       }}`
+
+	cclog.Init("debug", false)
+	o, err := NewGssOptimizer(json.RawMessage(testconfig))
+	if err != nil {
+		t.Errorf("failed to init GssOptimizer: %v", err.Error())
+		return
+	}
+
+	f := func(v int) float64 {
+		x := float64(v)
+		y := 0.006*x*x - 2.9*x + 400
+
+		return y
+	}
+	fn := func(v int) float64 {
+		x := float64(v)
+		y := 0.004*x*x - 2.9*x + 700
+
+		return y
+	}
+
+	in := 400.0
+	var out int
+	ok := false
+
+	for !ok {
+		out, ok = o.Start(in)
+		in = f(out)
+	}
+	i := 0
+	fmt.Printf("it %d in: %f out: %d\n", i, in, out)
+
+	for {
+		if i > 60 {
+			t.Errorf("failed to find minimum")
+			return
+		}
+
+		out = o.Update(in)
+		if i < 12 {
+			in = f(out)
+		} else if i < 34 {
+			in = fn(out)
+		} else {
+			in = f(out)
+		}
+		fmt.Printf("it %d in: %f out: %d\n", i, in, out)
+
+		if i > 45 && (out > 238 && out < 242) {
+			break
+		}
+
+		i++
+	}
 }
