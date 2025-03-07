@@ -1,7 +1,0 @@
-{
-    "metrics" : [
-        "instructions",
-        "cpu_energy"
-    ],
-    "interval" : "5s"
-}

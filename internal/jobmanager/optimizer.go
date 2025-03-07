@@ -2,7 +2,7 @@
 // All rights reserved. This file is part of cc-energy-manager.
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
-package optimizer
+package jobmanager
 
 import (
 	"encoding/json"
@@ -129,6 +129,7 @@ func (j *jobManager) Start() {
 	// Ticker for running the optimizer
 	j.ticker = *time.NewTicker(j.interval)
 	j.started = true
+	ok := false
 
 	go func(done chan bool, wg *sync.WaitGroup) {
 		for {
@@ -143,10 +144,20 @@ func (j *jobManager) Start() {
 				}
 
 			case <-j.ticker.C:
-				// TODO: Handle error and treat case no new values are available
 				input, _ := j.aggregator.Get()
+
+				if !ok { // TODO: Implement warmup
+					for !ok {
+						for _, t := range j.targets {
+							out, ok := j.optimizer[t].Start(input[t])
+						}
+					}
+				}
+				// TODO: Handle error and treat case no new values are available
 				for _, t := range j.targets {
-					j.optimizer[t].Update(input[t])
+					out := j.optimizer[t].Update(input[t])
+					// TODO: Implement controller package
+					j.output <- j.control.set(t, out)
 				}
 			}
 		}
