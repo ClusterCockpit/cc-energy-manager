@@ -65,8 +65,8 @@ func TestOptimize(t *testing.T) {
 	testconfig := `{
        "tol": 2,
        "borders": {
-         "lower_outer": 60,
-         "upper_outer": 600
+         "lower": 60,
+         "upper": 600
        }}`
 
 	cclog.Init("debug", false)
@@ -236,10 +236,14 @@ func TestMovingTwice(t *testing.T) {
 		}
 		fmt.Printf("it %d in: %f out: %d\n", i, in, out)
 
-		if i > 45 && (out > 238 && out < 242) {
+		if i > 70 && (out > 238 && out < 242) {
 			break
 		}
 
 		i++
+	}
+
+	if out > 600 {
+		t.Errorf("failed to calculate minimum")
 	}
 }

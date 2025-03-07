@@ -31,9 +31,7 @@ func New(rawConfig json.RawMessage) Aggregator {
 
 	switch cfg.Type {
 	case "last":
-		ag, err = NewLastAggregator(rawConfig)
-		// case "s3":
-		// 	ar = &S3Archive{}
+		ag, _ = NewLastAggregator(rawConfig)
 	default:
 		cclog.Errorf("Unknown aggregator %s", cfg.Type)
 	}

@@ -1,8 +1,0 @@
-{
-  "testnats": {
-    "type": "nats",
-    "address": "nats-server.example.org",
-    "port": "4222",
-    "subject": "subject"
-  }
-}

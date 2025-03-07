@@ -47,4 +47,5 @@ func (fsa *LastAggregator) Add(lp.CCMessage) {
 }
 
 func (fsa *LastAggregator) Get() (map[string]float64, error) {
+	return nil, nil
 }

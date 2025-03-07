@@ -14,7 +14,7 @@ import (
 
 type Mode int
 
-// enums used to choose the optimizing strategy
+// enum optimizing strategy
 const (
 	NarrowDown Mode = iota
 	BroadenUp
@@ -22,10 +22,10 @@ const (
 )
 
 type gssOptimizerConfig struct {
-	Tol     int `json:"tol"`
-	Borders struct {
-		Lower_outer int `json:"lower_outer"`
-		Upper_outer int `json:"upper_outer"`
+	Tolerance int `json:"tolerance"`
+	Borders   struct {
+		Lower int `json:"lower"`
+		Upper int `json:"upper"`
 	} `json:"borders,omitempty"`
 }
 
@@ -82,6 +82,14 @@ func (o *gssOptimizer) Start(fx float64) (x int, ok bool) {
 	cclog.Debugf("Startup finished: c(%f):%f d(%f):%f", o.c, o.fc, o.d, o.fd)
 	x = o.NarrowDown()
 	return x, true
+}
+
+func (o *gssOptimizer) IsConverged() bool {
+	if o.h < 4*o.tol {
+		return true
+	}
+
+	return false
 }
 
 func (o *gssOptimizer) Update(fx float64) (x int) {
@@ -202,9 +210,9 @@ func (o *gssOptimizer) BroadenUp() int {
 
 func NewGssOptimizer(config json.RawMessage) (*gssOptimizer, error) {
 	var c gssOptimizerConfig
-	c.Tol = 10
-	c.Borders.Lower_outer = 30
-	c.Borders.Upper_outer = 800
+	c.Tolerance = 10
+	c.Borders.Lower = 30
+	c.Borders.Upper = 800
 
 	err := json.Unmarshal(config, &c)
 	if err != nil {
@@ -213,8 +221,8 @@ func NewGssOptimizer(config json.RawMessage) (*gssOptimizer, error) {
 		return nil, err
 	}
 	o := gssOptimizer{
-		a:     float64(c.Borders.Lower_outer),
-		b:     float64(c.Borders.Upper_outer),
+		a:     float64(c.Borders.Lower),
+		b:     float64(c.Borders.Upper),
 		c:     nan,
 		d:     nan,
 		fa:    nan,
@@ -223,7 +231,7 @@ func NewGssOptimizer(config json.RawMessage) (*gssOptimizer, error) {
 		fd:    nan,
 		mode:  NarrowDown,
 		probe: nan,
-		tol:   float64(c.Tol),
+		tol:   float64(c.Tolerance),
 	}
 
 	return &o, err

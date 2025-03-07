@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	cmanager "github.com/ClusterCockpit/cc-energy-manager/pkg/ClusterManager"
+	cmanager "github.com/ClusterCockpit/cc-energy-manager/internal/clustermanager"
 	cfg "github.com/ClusterCockpit/cc-lib/ccConfig"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"

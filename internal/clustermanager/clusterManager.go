@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"sync"
 
-	optimizer "github.com/ClusterCockpit/cc-energy-manager/pkg/Optimizer"
+	optimizer "github.com/ClusterCockpit/cc-energy-manager/internal/optimizer"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
 	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
@@ -75,14 +75,14 @@ func (cm *clusterManager) Init(wg *sync.WaitGroup, config json.RawMessage) error
 	}
 	// TODO initialize all configured clusters
 	// If it is an unknown cluster, add it.
-	if _, ok := cm.clusters[c]; !ok {
-		cm.AddCluster(c)
-		// It is a non-configured cluster, go to next message
-		if _, ok := cm.clusters[c]; !ok {
-			cclog.ComponentError("ClusterManager", "Invalid cluster", c)
-			continue
-		}
-	}
+	// if _, ok := cm.clusters[c]; !ok {
+	// 	cm.AddCluster(c)
+	// 	// It is a non-configured cluster, go to next message
+	// 	if _, ok := cm.clusters[c]; !ok {
+	// 		cclog.ComponentError("ClusterManager", "Invalid cluster", c)
+	// 		continue
+	// 	}
+	// }
 
 	return nil
 }
@@ -147,10 +147,10 @@ func (cm *clusterManager) CloseJob(meta ccspecs.BaseJob) error {
 		if cluster, ok := cm.clusters[mycluster]; ok {
 			oid := fmt.Sprintf("%d", meta.JobID)
 			// If an optimizer exists for the job ID, close it
-			if o, ok := cluster.optimizers[oid]; ok {
-				cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "Close optimizer", oid)
-				o.optimizer.Close()
-			}
+			// if o, ok := cluster.optimizers[oid]; ok {
+			// 	cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "Close optimizer", oid)
+			// 	// o.optimizer.Close()
+			// }
 			// Delete optimizer from the host->optimizer_list mapping
 			for _, r := range meta.Resources {
 				idx := -1
@@ -189,63 +189,63 @@ func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) error {
 		// mycluster := fmt.Sprintf("%s-%s", meta.Cluster, meta.Partition)
 		mycluster := meta.Cluster
 		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "New job")
-		cluster := cm.clusters[mycluster]
+		// cluster := cm.clusters[mycluster]
 		// Only accept jobs for configured <cluster>-<partition> entries
-
-		if osettings, ok := cm.config.Optimizer[mycluster]; ok {
-			cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "New optimizer for job", meta.JobID)
-			// Generate a new optimizer
-			o, err := optimizer.NewGssOptimizer(fmt.Sprintf("%s-%d", mycluster, meta.JobID), &cm.optWg, meta, osettings)
-			if err != nil {
-				err := fmt.Errorf("failed to start new GSS optimizer for Job %d", meta.JobID)
-				cclog.ComponentError(fmt.Sprintf("ClusterManager(%s)", mycluster), err.Error())
-				return err
-			}
-			// Create a new job session
-			j := jobSession{
-				optimizer: o,
-				metadata:  meta,
-				input:     make(chan lp.CCMessage),
-				output:    make(chan lp.CCMessage),
-				done:      make(chan bool),
-			}
-			// Add channels of job session to optimizer
-			o.AddInput(j.input)
-			o.AddOutput(j.output)
-			go func(job jobSession, allout chan lp.CCMessage) {
-				for {
-					select {
-					case <-job.done:
-						return
-					case msg := <-job.output:
-						allout <- msg
-					}
-				}
-			}(j, cm.output)
-			// Register optimizer using the job ID as key
-			cluster.optimizers[fmt.Sprintf("%d", meta.JobID)] = j
-			// When receiving messages, we get the cluster and host name but not the
-			// partion. Also the exact metric and at which level is unknown, thus the
-			// optimizer is registered at each host and a mapping host->partition is
-			// set up
-			for _, r := range meta.Resources {
-				// host is unknown, so create new optimizer list
-				if _, ok := cluster.hosts2optimizers[r.Hostname]; !ok {
-					cluster.hosts2optimizers[r.Hostname] = make([]string, 0)
-				}
-				// Get list and add the job ID
-				olist := cluster.hosts2optimizers[r.Hostname]
-				olist = append(olist, fmt.Sprintf("%d", meta.JobID))
-				cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), fmt.Sprintf("Adding optimizer lookup for %s -> %d", r.Hostname, meta.JobID))
-				cluster.hosts2optimizers[r.Hostname] = olist
-				// Set up host->partition mapping
-				if _, ok := cm.hosts2partitions[r.Hostname]; !ok {
-					cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), fmt.Sprintf("Adding partition lookup for %s -> %s", r.Hostname, meta.Partition))
-					cm.hosts2partitions[r.Hostname] = meta.Partition
-				}
-			}
-			o.Start()
-		}
+		//
+		// if osettings, ok := cm.config.Optimizer[mycluster]; ok {
+		// 	cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), "New optimizer for job", meta.JobID)
+		// 	// Generate a new optimizer
+		// 	o, err := optimizer.NewGssOptimizer(fmt.Sprintf("%s-%d", mycluster, meta.JobID), &cm.optWg, meta, osettings)
+		// 	if err != nil {
+		// 		err := fmt.Errorf("failed to start new GSS optimizer for Job %d", meta.JobID)
+		// 		cclog.ComponentError(fmt.Sprintf("ClusterManager(%s)", mycluster), err.Error())
+		// 		return err
+		// 	}
+		// 	// Create a new job session
+		// 	j := jobSession{
+		// 		optimizer: o,
+		// 		metadata:  meta,
+		// 		input:     make(chan lp.CCMessage),
+		// 		output:    make(chan lp.CCMessage),
+		// 		done:      make(chan bool),
+		// 	}
+		// 	// Add channels of job session to optimizer
+		// 	o.AddInput(j.input)
+		// 	o.AddOutput(j.output)
+		// 	go func(job jobSession, allout chan lp.CCMessage) {
+		// 		for {
+		// 			select {
+		// 			case <-job.done:
+		// 				return
+		// 			case msg := <-job.output:
+		// 				allout <- msg
+		// 			}
+		// 		}
+		// 	}(j, cm.output)
+		// 	// Register optimizer using the job ID as key
+		// 	cluster.optimizers[fmt.Sprintf("%d", meta.JobID)] = j
+		// 	// When receiving messages, we get the cluster and host name but not the
+		// 	// partion. Also the exact metric and at which level is unknown, thus the
+		// 	// optimizer is registered at each host and a mapping host->partition is
+		// 	// set up
+		// 	for _, r := range meta.Resources {
+		// 		// host is unknown, so create new optimizer list
+		// 		if _, ok := cluster.hosts2optimizers[r.Hostname]; !ok {
+		// 			cluster.hosts2optimizers[r.Hostname] = make([]string, 0)
+		// 		}
+		// 		// Get list and add the job ID
+		// 		olist := cluster.hosts2optimizers[r.Hostname]
+		// 		olist = append(olist, fmt.Sprintf("%d", meta.JobID))
+		// 		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), fmt.Sprintf("Adding optimizer lookup for %s -> %d", r.Hostname, meta.JobID))
+		// 		cluster.hosts2optimizers[r.Hostname] = olist
+		// 		// Set up host->partition mapping
+		// 		if _, ok := cm.hosts2partitions[r.Hostname]; !ok {
+		// 			cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", mycluster), fmt.Sprintf("Adding partition lookup for %s -> %s", r.Hostname, meta.Partition))
+		// 			cm.hosts2partitions[r.Hostname] = meta.Partition
+		// 		}
+		// 	}
+		// 	o.Start()
+		// }
 
 	}
 	return nil
@@ -332,7 +332,7 @@ func (cm *clusterManager) Close() {
 	for _, c := range cm.clusters {
 		for ident, s := range c.optimizers {
 			cclog.ComponentDebug("ClusterManager", "Send close to session", ident)
-			s.optimizer.Close()
+			// s.optimizer.Close()
 			s.done <- true
 			// close(s.input)
 			// close(s.output)
