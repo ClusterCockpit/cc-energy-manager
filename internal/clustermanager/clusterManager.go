@@ -10,18 +10,18 @@ import (
 	"fmt"
 	"sync"
 
-	optimizer "github.com/ClusterCockpit/cc-energy-manager/internal/optimizer"
+	"github.com/ClusterCockpit/cc-energy-manager/internal/jobmanager"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
 	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
 )
 
 type jobSession struct {
-	optimizer optimizer.Optimizer
-	metadata  ccspecs.BaseJob
-	input     chan lp.CCMessage
-	output    chan lp.CCMessage
-	done      chan bool
+	manager  jobmanager.Optimizer
+	metadata ccspecs.BaseJob
+	input    chan lp.CCMessage
+	output   chan lp.CCMessage
+	done     chan bool
 }
 
 type clusterEntry struct {

@@ -4,10 +4,7 @@ go 1.23.4
 
 toolchain go1.24.0
 
-require (
-	github.com/ClusterCockpit/cc-lib v0.0.0-20250225084032-95e1411ac6bf
-	github.com/nats-io/nats.go v1.39.0
-)
+require github.com/ClusterCockpit/cc-lib v0.0.0-20250225084032-95e1411ac6bf
 
 require (
 	github.com/ClusterCockpit/cc-backend v1.4.2 // indirect
@@ -23,6 +20,7 @@ require (
 	github.com/influxdata/line-protocol/v2 v2.2.1 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/nats-io/nats.go v1.39.0 // indirect
 	github.com/nats-io/nkeys v0.4.9 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/oapi-codegen/runtime v1.1.1 // indirect

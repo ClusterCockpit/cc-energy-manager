@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ClusterCockpit/cc-energy-manager/internal/aggregator"
+	"github.com/ClusterCockpit/cc-energy-manager/internal/controller"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
 	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
@@ -37,6 +38,7 @@ type jobManager struct {
 	targets    []string
 	aggregator aggregator.Aggregator
 	optimizer  map[string]Optimizer
+	control    controller.Controller
 	ticker     time.Ticker
 	started    bool
 }
@@ -157,7 +159,7 @@ func (j *jobManager) Start() {
 				for _, t := range j.targets {
 					out := j.optimizer[t].Update(input[t])
 					// TODO: Implement controller package
-					j.output <- j.control.set(t, out)
+					j.output <- j.control.Set(t, out)
 				}
 			}
 		}
