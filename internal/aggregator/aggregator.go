@@ -13,7 +13,7 @@ import (
 
 type Aggregator interface {
 	Add(m lp.CCMessage)
-	Get() (map[string]float64, error)
+	Get() map[string]float64
 }
 
 func New(rawConfig json.RawMessage) Aggregator {

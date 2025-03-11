@@ -7,6 +7,7 @@ package aggregator
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
@@ -18,8 +19,8 @@ type LastAggregatorConfig struct {
 }
 
 type LastAggregator struct {
-	energy       float64
-	instructions float64
+	energy       map[string]float64
+	instructions map[string]float64
 	metrics      map[string]string
 }
 
@@ -39,13 +40,60 @@ func NewLastAggregator(rawConfig json.RawMessage) (*LastAggregator, error) {
 	ag.metrics = make(map[string]string)
 	ag.metrics["energy"] = config.Energy
 	ag.metrics["instructions"] = config.Instructions
+	ag.energy = make(map[string]float64)
+	ag.instructions = make(map[string]float64)
 
 	return ag, nil
 }
 
-func (fsa *LastAggregator) Add(lp.CCMessage) {
+func valueToFloat64(value interface{}) (float64, error) {
+	switch v := value.(type) {
+	case float64:
+		return v, nil
+	case float32:
+		return float64(v), nil
+	case int64:
+		return float64(v), nil
+	case uint64:
+		return float64(v), nil
+	case int32:
+		return float64(v), nil
+	case uint32:
+		return float64(v), nil
+	case int16:
+		return float64(v), nil
+	case uint16:
+		return float64(v), nil
+	case int8:
+		return float64(v), nil
+	case uint8:
+		return float64(v), nil
+	}
+	return math.NaN(), fmt.Errorf("cannot convert %v to float64", value)
 }
 
-func (fsa *LastAggregator) Get() (map[string]float64, error) {
-	return nil, nil
+func (a *LastAggregator) Add(m lp.CCMessage) {
+	metric := m.Name()
+	if h, ok := m.GetTag("hostname"); ok {
+		switch metric {
+		case a.metrics["energy"]:
+			value, _ := valueToFloat64(m.GetMetricValue())
+			a.energy[h] = value
+		case a.metrics["instructions"]:
+			value, _ := valueToFloat64(m.GetMetricValue())
+			a.instructions[h] = value
+		}
+	}
+}
+
+func (a *LastAggregator) Get() map[string]float64 {
+	edp := make(map[string]float64)
+
+	for h, energy := range a.energy {
+		if instructions, ok := a.instructions[h]; ok {
+			edp[h] = energy / instructions
+		}
+	}
+
+	return edp
 }

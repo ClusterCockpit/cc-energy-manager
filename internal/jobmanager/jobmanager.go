@@ -116,8 +116,8 @@ func (j *JobManager) AddOutput(output chan lp.CCMessage) {
 func (r *JobManager) Close() {
 	if r.started {
 		cclog.ComponentDebug("JobManager", "Sending Done")
-		r.done <- true
-		<-r.done
+		r.Done <- true
+		<-r.Done
 		cclog.ComponentDebug("JobManager", "STOPPING Timer")
 		// os.ticker.Stop()
 	}
@@ -140,13 +140,13 @@ func (j *JobManager) Start() {
 				wg.Done()
 				close(done)
 				return
-			case <-j.input: // TODO: Is this correct? Or is a value lost?
-				for i := 0; i < len(j.input) && i < 10; i++ {
-					j.aggregator.Add(<-j.input)
+			case <-j.Input: // TODO: Is this correct? Or is a value lost?
+				for i := 0; i < len(j.Input) && i < 10; i++ {
+					j.aggregator.Add(<-j.Input)
 				}
 
 			case <-j.ticker.C:
-				input, _ := j.aggregator.Get()
+				input := j.aggregator.Get()
 
 				if !ok { // TODO: Implement warmup
 					for !ok {
@@ -163,5 +163,5 @@ func (j *JobManager) Start() {
 				}
 			}
 		}
-	}(j.done, j.wg)
+	}(j.Done, j.wg)
 }
