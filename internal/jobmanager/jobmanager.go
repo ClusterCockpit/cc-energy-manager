@@ -29,10 +29,10 @@ type optimizerConfig struct {
 	IntervalSearch    string `json:"intervalSearch"`
 }
 
-type jobManager struct {
+type JobManager struct {
 	wg         *sync.WaitGroup
-	done       chan bool
-	input      chan lp.CCMessage
+	Done       chan bool
+	Input      chan lp.CCMessage
 	output     chan lp.CCMessage
 	interval   time.Duration
 	targets    []string
@@ -51,7 +51,7 @@ type Optimizer interface {
 
 func NewJobManager(wg *sync.WaitGroup, resources []*ccspecs.Resource,
 	config json.RawMessage,
-) (*jobManager, error) {
+) (*JobManager, error) {
 	var c optimizerConfig
 
 	err := json.Unmarshal(config, &c)
@@ -60,9 +60,9 @@ func NewJobManager(wg *sync.WaitGroup, resources []*ccspecs.Resource,
 		cclog.ComponentError("JobManager", err.Error())
 		return nil, err
 	}
-	j := jobManager{
+	j := JobManager{
 		wg:        wg,
-		done:      make(chan bool),
+		Done:      make(chan bool),
 		started:   false,
 		optimizer: make(map[string]Optimizer),
 	}
@@ -104,16 +104,16 @@ func isAcceleratorMetric(metric string) bool {
 	return strings.HasPrefix(metric, "acc_")
 }
 
-func (j *jobManager) AddInput(input chan lp.CCMessage) {
-	j.input = input
+func (j *JobManager) AddInput(input chan lp.CCMessage) {
+	j.Input = input
 }
 
-func (j *jobManager) AddOutput(output chan lp.CCMessage) {
+func (j *JobManager) AddOutput(output chan lp.CCMessage) {
 	j.output = output
 }
 
 // TODO: Fix correct shutdown
-func (r *jobManager) Close() {
+func (r *JobManager) Close() {
 	if r.started {
 		cclog.ComponentDebug("JobManager", "Sending Done")
 		r.done <- true
@@ -126,7 +126,7 @@ func (r *jobManager) Close() {
 	cclog.ComponentDebug("JobManager", "CLOSE")
 }
 
-func (j *jobManager) Start() {
+func (j *JobManager) Start() {
 	j.wg.Add(1)
 	// Ticker for running the optimizer
 	j.ticker = *time.NewTicker(j.interval)

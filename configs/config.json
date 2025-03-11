@@ -13,12 +13,7 @@
       "meta_as_tags": []
     }
   },
-  "budgets": {
-    "fritz-main": {
-      "max_power_budget": 2000.0
-    }
-  },
-  "optimizer": {
+  "clusters": {
     "fritz-main": {
       "scope": "node",
       "aggregator": {
@@ -37,44 +32,44 @@
         "lower": 60,
         "upper": 700
       }
-    }
-  },
-  "alex-a100": {
-    "scope": "gpu",
-    "aggregator": {
-      "type": "last",
-      "energy": "acc_power",
-      "instructions": "kernels"
     },
-    "control": {
-      "name": "nvml.power_limit",
-      "type": "gpu"
+    "alex-a100": {
+      "scope": "gpu",
+      "aggregator": {
+        "type": "last",
+        "energy": "acc_power",
+        "instructions": "kernels"
+      },
+      "control": {
+        "name": "nvml.power_limit",
+        "type": "gpu"
+      },
+      "intervalConverged": "5m",
+      "intervalSearch": "2m",
+      "tolerance": 5,
+      "borders": {
+        "lower": 80,
+        "upper": 1000
+      }
     },
-    "intervalConverged": "5m",
-    "intervalSearch": "2m",
-    "tolerance": 5,
-    "borders": {
-      "lower": 80,
-      "upper": 1000
-    }
-  },
-  "alex-cpu": {
-    "scope": "job",
-    "aggregator": {
-      "type": "lastJob",
-      "energy": "cpu_energy",
-      "instructions": "instructions"
-    },
-    "control": {
-      "name": "rapl.pkg_power_limit1",
-      "type": "socket"
-    },
-    "intervalConverged": "5m",
-    "intervalSearch": "2m",
-    "tolerance": 5,
-    "borders": {
-      "lower": 123,
-      "upper": 800
+    "alex-a100-gpu": {
+      "scope": "job",
+      "aggregator": {
+        "type": "lastJob",
+        "energy": "cpu_energy",
+        "instructions": "instructions"
+      },
+      "control": {
+        "name": "rapl.pkg_power_limit1",
+        "type": "socket"
+      },
+      "intervalConverged": "5m",
+      "intervalSearch": "2m",
+      "tolerance": 5,
+      "borders": {
+        "lower": 123,
+        "upper": 800
+      }
     }
   }
 }

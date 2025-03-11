@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-	"time"
 
 	cmanager "github.com/ClusterCockpit/cc-energy-manager/internal/clustermanager"
 	cfg "github.com/ClusterCockpit/cc-lib/ccConfig"
@@ -20,16 +19,12 @@ import (
 	"github.com/ClusterCockpit/cc-lib/sinks"
 )
 
-type RuntimeConfig struct {
-	Interval       time.Duration
-	SinkManager    sinks.SinkManager
-	ReceiveManager receivers.ReceiveManager
-	ClustManager   cmanager.ClusterManager
-	Channels       []chan lp.CCMessage
-	Sync           sync.WaitGroup
-}
-
 var (
+	SinkManager                            sinks.SinkManager
+	ReceiveManager                         receivers.ReceiveManager
+	ClustManager                           cmanager.ClusterManager
+	Channels                               []chan lp.CCMessage
+	Sync                                   sync.WaitGroup
 	flagOnce, flagVersion, flagLogDateTime bool
 	flagConfigFile, flagLogLevel           string
 )
@@ -43,8 +38,8 @@ func ReadCli() {
 }
 
 // General shutdownHandler function that gets executed in case of interrupt or graceful shutdownHandler
-func shutdownHandler(config *RuntimeConfig, shutdownSignal chan os.Signal) {
-	defer config.Sync.Done()
+func shutdownHandler(shutdownSignal chan os.Signal) {
+	defer Sync.Done()
 
 	<-shutdownSignal
 	// Remove shutdown handler
@@ -53,40 +48,29 @@ func shutdownHandler(config *RuntimeConfig, shutdownSignal chan os.Signal) {
 
 	cclog.Info("Shutdown...")
 
-	if config.ReceiveManager != nil {
+	if ReceiveManager != nil {
 		cclog.Debug("Shutdown ReceiveManager...")
-		config.ReceiveManager.Close()
+		ReceiveManager.Close()
 	}
-	if config.SinkManager != nil {
+	if SinkManager != nil {
 		cclog.Debug("Shutdown SinkManager...")
-		config.SinkManager.Close()
+		SinkManager.Close()
 	}
-	if config.ClustManager != nil {
+	if ClustManager != nil {
 		cclog.Debug("Shutdown ClusterManager...")
-		config.ClustManager.Close()
+		ClustManager.Close()
 	}
 }
 
 func mainFunc() int {
 	var err error
 
-	// Initialize runtime configuration
-	rcfg := RuntimeConfig{
-		SinkManager:    nil,
-		ReceiveManager: nil,
-		ClustManager:   nil,
-	}
-
 	ReadCli()
-	// Initialize ccLogger
 	cclog.Init(flagLogLevel, flagLogDateTime)
-
-	// Load configuration
 	cfg.Init(flagConfigFile)
 
-	// Create new sink
 	if cfg := cfg.GetPackageConfig("sinks"); cfg != nil {
-		rcfg.SinkManager, err = sinks.New(&rcfg.Sync, cfg)
+		SinkManager, err = sinks.New(&Sync, cfg)
 		if err != nil {
 			cclog.Error(err.Error())
 			return 1
@@ -96,9 +80,8 @@ func mainFunc() int {
 		return 1
 	}
 
-	// Create new receive manager
 	if cfg := cfg.GetPackageConfig("receivers"); cfg != nil {
-		rcfg.ReceiveManager, err = receivers.New(&rcfg.Sync, cfg)
+		ReceiveManager, err = receivers.New(&Sync, cfg)
 		if err != nil {
 			cclog.Error(err.Error())
 			return 1
@@ -109,7 +92,7 @@ func mainFunc() int {
 	}
 
 	if cfg := cfg.GetPackageConfig("optimizer"); cfg != nil {
-		rcfg.ClustManager, err = cmanager.NewClusterManager(&rcfg.Sync, cfg)
+		ClustManager, err = cmanager.NewClusterManager(&Sync, cfg)
 		if err != nil {
 			cclog.Error(err.Error())
 			return 1
@@ -123,25 +106,23 @@ func mainFunc() int {
 	shutdownSignal := make(chan os.Signal, 1)
 	signal.Notify(shutdownSignal, os.Interrupt)
 	signal.Notify(shutdownSignal, syscall.SIGTERM)
-	rcfg.Sync.Add(1)
-	go shutdownHandler(&rcfg, shutdownSignal)
+	Sync.Add(1)
+	go shutdownHandler(shutdownSignal)
 
-	// RouterToOptimizerChannel := make(chan lp.CCMessage, 200)
 	ReceiversToClusterManagerChannel := make(chan lp.CCMessage, 200)
 	ClusterManagerToSinksChannel := make(chan lp.CCMessage, 200)
 
-	rcfg.SinkManager.AddInput(ClusterManagerToSinksChannel)
-	rcfg.ClustManager.AddOutput(ClusterManagerToSinksChannel)
-	rcfg.ReceiveManager.AddOutput(ReceiversToClusterManagerChannel)
-	rcfg.ClustManager.AddInput(ReceiversToClusterManagerChannel)
+	SinkManager.AddInput(ClusterManagerToSinksChannel)
+	ClustManager.AddOutput(ClusterManagerToSinksChannel)
+	ReceiveManager.AddOutput(ReceiversToClusterManagerChannel)
+	ClustManager.AddInput(ReceiversToClusterManagerChannel)
 
-	// Start the managers
-	rcfg.SinkManager.Start()
-	rcfg.ReceiveManager.Start()
-	rcfg.ClustManager.Start()
+	SinkManager.Start()
+	ReceiveManager.Start()
+	ClustManager.Start()
 
 	// Wait that all goroutines finish
-	rcfg.Sync.Wait()
+	Sync.Wait()
 
 	return 0
 }
