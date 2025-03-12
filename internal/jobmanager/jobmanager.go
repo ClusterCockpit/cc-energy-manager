@@ -131,28 +131,26 @@ func (j *JobManager) Start() {
 	// Ticker for running the optimizer
 	j.ticker = *time.NewTicker(j.interval)
 	j.started = true
-	ok := false
 
 	go func(done chan bool, wg *sync.WaitGroup) {
+		warmUpDone := false
 		for {
 			select {
 			case <-done:
 				wg.Done()
 				close(done)
 				return
-			case <-j.Input: // TODO: Is this correct? Or is a value lost?
-				for i := 0; i < len(j.Input) && i < 10; i++ {
+			case <-j.Input:
+				for i := 0; i < 10 && len(j.Input) > 0; i++ {
 					j.aggregator.Add(<-j.Input)
 				}
 
 			case <-j.ticker.C:
 				input := j.aggregator.Get()
 
-				if !ok { // TODO: Implement warmup
-					for !ok {
-						for _, t := range j.targets {
-							out, ok := j.optimizer[t].Start(input[t])
-						}
+				for !warmUpDone {
+					for _, t := range j.targets {
+						out, warmUpDone := j.optimizer[t].Start(input[t])
 					}
 				}
 
