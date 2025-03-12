@@ -19,28 +19,26 @@ import (
 )
 
 type optimizerConfig struct {
-	Scope   string          `json:"scope"`
-	AggCfg  json.RawMessage `json:"aggregator"`
-	Control struct {
-		Name string `json:"name"`
-		Type string `json:"type"`
-	} `json:"control"`
-	IntervalConverged string `json:"intervalConverged"`
-	IntervalSearch    string `json:"intervalSearch"`
+	Scope             string          `json:"scope"`
+	AggCfg            json.RawMessage `json:"aggregator"`
+	CtrlConfig        json.RawMessage `json:"control"`
+	IntervalConverged string          `json:"intervalConverged"`
+	IntervalSearch    string          `json:"intervalSearch"`
 }
 
 type JobManager struct {
-	wg         *sync.WaitGroup
-	Done       chan bool
-	Input      chan lp.CCMessage
-	output     chan lp.CCMessage
-	interval   time.Duration
-	targets    []string
-	aggregator aggregator.Aggregator
-	optimizer  map[string]Optimizer
-	control    controller.Controller
-	ticker     time.Ticker
-	started    bool
+	wg          *sync.WaitGroup
+	Done        chan bool
+	Input       chan lp.CCMessage
+	output      chan lp.CCMessage
+	interval    time.Duration
+	targets     []string
+	ctrlTargets map[string][]string
+	aggregator  aggregator.Aggregator
+	optimizer   map[string]Optimizer
+	control     controller.Controller
+	ticker      time.Ticker
+	started     bool
 }
 
 type Optimizer interface {
@@ -76,6 +74,7 @@ func NewJobManager(wg *sync.WaitGroup, resources []*ccspecs.Resource,
 	j.interval = t
 	// TODO: Generate target list from job resources using scope
 	j.targets = make([]string, 0)
+	j.ctrlTargets = make(map[string][]string)
 	// for _, r := range resources {
 	//   if isSocketMetric(r.Name) || isAcceleratorMetric(r.Name) {
 	//     j.targets = append(j.targets, r.Name)
@@ -83,6 +82,7 @@ func NewJobManager(wg *sync.WaitGroup, resources []*ccspecs.Resource,
 	// }
 
 	j.aggregator = aggregator.New(c.AggCfg)
+	j.control, _ = controller.NewCcController(c.CtrlConfig)
 
 	for _, t := range j.targets {
 		j.optimizer[t], err = NewGssOptimizer(config)
@@ -155,11 +155,14 @@ func (j *JobManager) Start() {
 						}
 					}
 				}
+
 				// TODO: Handle error and treat case no new values are available
 				for _, t := range j.targets {
 					out := j.optimizer[t].Update(input[t])
-					// TODO: Implement controller package
-					j.output <- j.control.Set(t, out)
+
+					for _, ct := range j.ctrlTargets[t] {
+						j.control.Set(ct, out)
+					}
 				}
 			}
 		}
