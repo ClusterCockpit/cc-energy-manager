@@ -133,7 +133,7 @@ func (j *JobManager) Start() {
 	j.started = true
 
 	go func(done chan bool, wg *sync.WaitGroup) {
-		warmUpDone := false
+		// warmUpDone := false
 		for {
 			select {
 			case <-done:
@@ -148,11 +148,14 @@ func (j *JobManager) Start() {
 			case <-j.ticker.C:
 				input := j.aggregator.Get()
 
-				for !warmUpDone {
-					for _, t := range j.targets {
-						out, warmUpDone := j.optimizer[t].Start(input[t])
-					}
-				}
+				// for !warmUpDone {
+				// 	for _, t := range j.targets {
+				//         out, warmUpDone := j.optimizer[t].Start(input[t])
+				// 		for _, ct := range j.ctrlTargets[t] {
+				// 			j.control.Set(ct, out)
+				// 		}
+				// 	}
+				// }
 
 				// TODO: Handle error and treat case no new values are available
 				for _, t := range j.targets {

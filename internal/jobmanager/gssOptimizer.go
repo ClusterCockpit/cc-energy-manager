@@ -85,11 +85,7 @@ func (o *gssOptimizer) Start(fx float64) (x int, ok bool) {
 }
 
 func (o *gssOptimizer) IsConverged() bool {
-	if o.h < 4*o.tol {
-		return true
-	}
-
-	return false
+	return o.h < 4*o.tol
 }
 
 func (o *gssOptimizer) Update(fx float64) (x int) {
