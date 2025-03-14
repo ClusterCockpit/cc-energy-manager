@@ -34,6 +34,8 @@ func New(rawConfig json.RawMessage) Aggregator {
 	switch cfg.Type {
 	case "last":
 		ag, _ = NewLastAggregator(rawConfig)
+	case "median":
+		ag, _ = NewMedianAggregator(rawConfig)
 	default:
 		cclog.Errorf("Unknown aggregator %s", cfg.Type)
 	}
