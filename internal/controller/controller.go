@@ -107,7 +107,9 @@ func getControlClient(c *ccController, cluster string) (cccontrol.CCControlClien
 		/* If we don't have a CCControlClient for the required cluster in our map, create a new one */
 		cclog.Debug("No CCControlClient found for cluster %s. Creating new one", cluster)
 
-		// TODO we have to set our appropriate NATS subject here
+		// FIXME make the NATS subject properly configurable:
+		// Currently is is fixed to the cluster name.
+		c.nats.OutputSubject = cluster
 		controlClient, err := cccontrol.NewCCControlClient(c.nats)
 		if err != nil {
 			return nil, fmt.Errorf("NewCCControlClient failed: %w", err)
