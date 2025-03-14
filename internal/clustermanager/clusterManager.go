@@ -101,11 +101,13 @@ func (cm *clusterManager) CloseJob(meta ccspecs.BaseJob) error {
 	return errors.New("job metadata does not contain data for cluster and jobid")
 }
 
-func (cm *clusterManager) registerJob(sckey string, jmkey string, resources []*ccspecs.Resource) {
+func (cm *clusterManager) registerJob(clusterName string, sckey string, jmkey string, resources []*ccspecs.Resource) {
 	if cluster, ok := cm.subclusters[sckey]; !ok {
-		jm, _ := jobmanager.NewJobManager(cm.wg, resources, cluster.config)
+		// TODO is cm.subclusters[sckey] == clusterName?
+		// if yes, then the parameter clusterName can be removed.
+		// To me the code suggests cm.subclusters[sckey] is the subcluster name, which I don't want
+		jm, _ := jobmanager.NewJobManager(cm.wg, clusterName, resources, cluster.config)
 		jm.AddInput(jm.Input)
-		jm.AddOutput(cm.output)
 
 		cluster.jobManagers[jmkey] = jm
 
@@ -131,12 +133,14 @@ func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) {
 		}
 
 		cm.registerJob(
+			meta.Cluster,
 			fmt.Sprintf("%s-%s", meta.Cluster, meta.SubCluster),
 			fmt.Sprintf("%d", meta.JobID),
 			meta.Resources)
 
 		if meta.NumAcc > 0 {
 			cm.registerJob(
+				meta.Cluster,
 				fmt.Sprintf("%s-%s-gpu", meta.Cluster, meta.SubCluster),
 				fmt.Sprintf("%d", meta.JobID),
 				meta.Resources)

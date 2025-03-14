@@ -4,10 +4,11 @@ go 1.23.4
 
 toolchain go1.24.0
 
-require github.com/ClusterCockpit/cc-lib v0.0.0-20250225084032-95e1411ac6bf
+require github.com/ClusterCockpit/cc-lib v0.1.0-beta.1
 
 require (
 	github.com/ClusterCockpit/cc-backend v1.4.2 // indirect
+	github.com/ClusterCockpit/cc-node-controller v0.0.0-20250314153756-39e233a9145e // indirect
 	github.com/ClusterCockpit/cc-units v0.4.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

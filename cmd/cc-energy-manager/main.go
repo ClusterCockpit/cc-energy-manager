@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	cmanager "github.com/ClusterCockpit/cc-energy-manager/internal/clustermanager"
+	"github.com/ClusterCockpit/cc-energy-manager/internal/controller"
 	cfg "github.com/ClusterCockpit/cc-lib/ccConfig"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
@@ -101,6 +102,18 @@ func mainFunc() int {
 		cclog.Error("Optimizer configuration must be present")
 		return 1
 	}
+
+	if cfg := cfg.GetPackageConfig("controller"); cfg != nil {
+		controller.Instance, err = controller.NewCcController(cfg)
+		if err != nil {
+			cclog.Error(err.Error())
+			return 1
+		}
+	} else {
+		cclog.Error("Controller configuration must be present")
+		return 1
+	}
+	defer controller.Instance.Cleanup()
 
 	// Create shutdown handler
 	shutdownSignal := make(chan os.Signal, 1)

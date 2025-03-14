@@ -18,27 +18,33 @@ import (
 	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
 )
 
+type controlConfig struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
 type optimizerConfig struct {
-	Scope             string          `json:"scope"`
-	AggCfg            json.RawMessage `json:"aggregator"`
-	CtrlConfig        json.RawMessage `json:"control"`
-	IntervalConverged string          `json:"intervalConverged"`
-	IntervalSearch    string          `json:"intervalSearch"`
+	Scope             string `json:"scope"`
+	OptDeviceType     string `json:"optDeviceType"`
+	AggCfg  json.RawMessage  `json:"aggregator"`
+	ControlCfg controlConfig `json:"control"`
+	IntervalConverged string `json:"intervalConverged"`
+	IntervalSearch    string `json:"intervalSearch"`
 }
 
 type JobManager struct {
-	wg          *sync.WaitGroup
-	Done        chan bool
-	Input       chan lp.CCMessage
-	output      chan lp.CCMessage
-	interval    time.Duration
-	targets     []string
-	ctrlTargets map[string][]string
-	aggregator  aggregator.Aggregator
-	optimizer   map[string]Optimizer
-	control     controller.Controller
-	ticker      time.Ticker
-	started     bool
+	wg         *sync.WaitGroup
+	Done       chan bool
+	Input      chan lp.CCMessage
+	interval   time.Duration
+	cluster    string
+	resources  []*ccspecs.Resource
+	aggregator aggregator.Aggregator
+	targetToOptimizer map[string]Optimizer
+	targetToDevices   map[string][]string
+	ticker     time.Ticker
+	started    bool
+	cfg        optimizerConfig
 }
 
 type Optimizer interface {
@@ -47,50 +53,114 @@ type Optimizer interface {
 	IsConverged() bool
 }
 
-func NewJobManager(wg *sync.WaitGroup, resources []*ccspecs.Resource,
+/* A `target` string may be:
+ * - 'node01/socket/42'                   (device scope)
+ * - 'node01/nvidia_gpu/00000000:00:3f.0' (device scope)
+ * - 'node01'                             (node scope)
+ * - ''                                   (job scope)
+ * 
+ * A `device` string is a `target` string, which must be at target scope. */
+func TargetName(hostname *string, deviceType *string, deviceId *string) string {
+	if hostname == nil {
+		return ""
+	}
+	if deviceType != nil && deviceId != nil {
+		return fmt.Sprintf("%s/%s/%s", *hostname, *deviceType, *deviceId)
+	}
+	return *hostname
+}
+
+func NewJobManager(wg *sync.WaitGroup, cluster string, resources []*ccspecs.Resource,
 	config json.RawMessage,
 ) (*JobManager, error) {
-	var c optimizerConfig
+	var cfg optimizerConfig
 
-	err := json.Unmarshal(config, &c)
+	err := json.Unmarshal(config, &cfg)
 	if err != nil {
 		err := fmt.Errorf("failed to parse config: %v", err.Error())
 		cclog.ComponentError("JobManager", err.Error())
 		return nil, err
 	}
+
 	j := JobManager{
 		wg:        wg,
 		Done:      make(chan bool),
 		started:   false,
-		optimizer: make(map[string]Optimizer),
+		targetToOptimizer: make(map[string]Optimizer),
+		targetToDevices: make(map[string][]string),
+		cfg:       cfg,
+		resources: resources,
+		aggregator: aggregator.New(cfg.AggCfg),
+		cluster:   cluster,
 	}
 
-	t, err := time.ParseDuration(c.IntervalSearch)
+	t, err := time.ParseDuration(cfg.IntervalSearch)
 	if err != nil {
-		err := fmt.Errorf("failed to parse interval %s: %v", c.IntervalSearch, err.Error())
+		err := fmt.Errorf("failed to parse interval %s: %v", cfg.IntervalSearch, err.Error())
 		cclog.ComponentError("JobManager", err.Error())
 		return nil, err
 	}
+
 	j.interval = t
-	// TODO: Generate target list from job resources using scope
-	j.targets = make([]string, 0)
-	j.ctrlTargets = make(map[string][]string)
-	// for _, r := range resources {
-	//   if isSocketMetric(r.Name) || isAcceleratorMetric(r.Name) {
-	//     j.targets = append(j.targets, r.Name)
-	//   }
-	// }
 
-	j.aggregator = aggregator.New(c.AggCfg)
-	j.control, _ = controller.NewCcController(c.CtrlConfig)
+	/* Assert a valid device type here, so that we don't have to check edge cases everywhere else. */
+	if cfg.OptDeviceType != "socket" && cfg.OptDeviceType != "nvidia_gpu" {
+		return nil, fmt.Errorf("Invalid device to optimizer power for: %s", cfg.OptDeviceType)
+	}
 
-	for _, t := range j.targets {
-		j.optimizer[t], err = NewGssOptimizer(config)
+	if cfg.Scope == "job" {
+		/* Calculate global optimum for all devices on all nodes belonging to job.
+		 * Use one optimizer for everything. */
+		targetName := TargetName(nil, nil, nil)
+		j.targetToOptimizer[targetName], err = NewGssOptimizer(config)
 		if err != nil {
-			err := fmt.Errorf("failed to initialize GSSOptimizer: %v", err.Error())
-			cclog.ComponentError("JobManager", err.Error())
 			return nil, err
 		}
+
+		devices := make([]string, 0)
+		j.targetToDevices[targetName] = devices
+
+		for _, resource := range resources {
+			for _, deviceId := range controller.Instance.GetDeviceIdsForResources(cluster, cfg.OptDeviceType, resource) {
+				devices = append(devices, TargetName(&resource.Hostname, &cfg.OptDeviceType, &deviceId))
+			}
+		}
+	} else if cfg.Scope == "node" {
+		/* Calculate local optimum for each individual node of a job and apply it to all the devices of a node */
+
+		for _, resource := range resources {
+			/* Create one optimzer for each host */
+			targetName := TargetName(&resource.Hostname, nil, nil)
+			j.targetToOptimizer[targetName], err = NewGssOptimizer(config)
+			if err != nil {
+				return nil, err
+			}
+
+			devices := make([]string, 0)
+			j.targetToDevices[targetName] = devices
+
+			for _, deviceId := range controller.Instance.GetDeviceIdsForResources(cluster, cfg.OptDeviceType, resource) {
+				devices = append(devices, TargetName(&resource.Hostname, &cfg.OptDeviceType, &deviceId))
+			}
+		}
+	} else if cfg.Scope == "device" {
+		/* Calculate optimum individually for each device for each individual node. */
+
+		for _, resource := range resources {
+			for _, deviceId := range controller.Instance.GetDeviceIdsForResources(cluster, cfg.OptDeviceType, resource) {
+				/* Create one optimizer for each device on a host to optimize. */
+				targetName := TargetName(&resource.Hostname, &cfg.OptDeviceType, &deviceId)
+				j.targetToOptimizer[targetName], err = NewGssOptimizer(config)
+				if err != nil {
+					return nil, err
+				}
+				/* In "device" scope, `target` and `device` strings are indentical */
+				deviceName := targetName
+				j.targetToDevices[targetName] = []string{ deviceName }
+			}
+		}
+	} else {
+		cclog.Fatal("Requested unsupported scope: %s", cfg.Scope)
 	}
 
 	return &j, nil
@@ -106,10 +176,6 @@ func isAcceleratorMetric(metric string) bool {
 
 func (j *JobManager) AddInput(input chan lp.CCMessage) {
 	j.Input = input
-}
-
-func (j *JobManager) AddOutput(output chan lp.CCMessage) {
-	j.output = output
 }
 
 // TODO: Fix correct shutdown
@@ -133,36 +199,33 @@ func (j *JobManager) Start() {
 	j.started = true
 
 	go func(done chan bool, wg *sync.WaitGroup) {
-		// warmUpDone := false
+		warmUpDone := false
 		for {
 			select {
 			case <-done:
 				wg.Done()
 				close(done)
 				return
-			case <-j.Input:
-				for i := 0; i < 10 && len(j.Input) > 0; i++ {
-					j.aggregator.Add(<-j.Input)
+			case inputVal := <-j.Input:
+				j.aggregator.Add(inputVal)
+			case <-j.ticker.C:
+				/* TODO the current spec of the aggregator must be fixed to accomodate our changes.
+				 * At the moment the LastAggregator only returns a host as key in the map, which is pretty useless.
+				 * We need it to return a target name. See above for details. */
+				aggregatedMetrics := j.aggregator.Get()
+
+				for !warmUpDone {
+					for targetName, optimizer := range j.targetToOptimizer {
+						_, warmUpDone = optimizer.Start(aggregatedMetrics[targetName])
+					}
 				}
 
-			case <-j.ticker.C:
-				input := j.aggregator.Get()
+				for target, optimizer := range j.targetToOptimizer {
+					optimum := fmt.Sprintf("%f", optimizer.Update(aggregatedMetrics[target]))
 
-				// for !warmUpDone {
-				// 	for _, t := range j.targets {
-				//         out, warmUpDone := j.optimizer[t].Start(input[t])
-				// 		for _, ct := range j.ctrlTargets[t] {
-				// 			j.control.Set(ct, out)
-				// 		}
-				// 	}
-				// }
-
-				// TODO: Handle error and treat case no new values are available
-				for _, t := range j.targets {
-					out := j.optimizer[t].Update(input[t])
-
-					for _, ct := range j.ctrlTargets[t] {
-						j.control.Set(ct, out)
+					for _, device := range j.targetToDevices[target] {
+						/* `device` is a full string like: "node01/nvidia_gpu/00000000:1f.2.0" */
+						controller.Instance.Set(j.cluster, device, j.cfg.ControlCfg.Name, optimum)
 					}
 				}
 			}
