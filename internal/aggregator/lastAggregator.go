@@ -88,12 +88,20 @@ func (a *LastAggregator) Add(m lp.CCMessage) {
 
 func (a *LastAggregator) Get() map[string]float64 {
 	edp := make(map[string]float64)
+	max := 0.0
+	maxHost := ""
 
 	for h, energy := range a.energy {
 		if instructions, ok := a.instructions[h]; ok {
 			edp[h] = energy / instructions
+			if instructions > max {
+				max = instructions
+				maxHost = h
+			}
 		}
 	}
+
+	edp["job"] = edp[maxHost]
 
 	return edp
 }

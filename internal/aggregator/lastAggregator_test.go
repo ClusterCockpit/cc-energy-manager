@@ -127,4 +127,8 @@ func TestAddMultiple(t *testing.T) {
 	if in["m1205"] != energy[2]/instructions[2] {
 		t.Errorf("expected %f, got %f", energy[2]/instructions[2], in["m1205"])
 	}
+
+	if in["job"] != in["m1206"] {
+		t.Errorf("expected %f, got %f", in["m1206"], in["job"])
+	}
 }
