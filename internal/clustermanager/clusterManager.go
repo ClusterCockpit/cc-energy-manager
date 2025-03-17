@@ -18,8 +18,8 @@ import (
 
 type subclusterEntry struct {
 	name              string
-	hostsToJobManager map[string][]string
-	jobManagers       map[string]*jobmanager.JobManager
+	hostToJobIds      map[string][]int64
+	jobManagers       map[int64]*jobmanager.JobManager
 	config            json.RawMessage
 }
 
@@ -29,7 +29,7 @@ type clusterManager struct {
 	wg                *sync.WaitGroup
 	input             chan lp.CCMessage
 	output            chan lp.CCMessage
-	hostsToSubcluster map[string]string
+	hostToSubcluster  map[string]string
 }
 
 type ClusterManager interface {
@@ -43,8 +43,8 @@ func (cm *clusterManager) AddCluster(key string, rawConfig json.RawMessage) {
 	if _, ok := cm.subclusters[key]; !ok {
 		ce := subclusterEntry{
 			name:              key,
-			hostsToJobManager: make(map[string][]string),
-			jobManagers:       make(map[string]*jobmanager.JobManager),
+			hostToJobIds:      make(map[string][]int64),
+			jobManagers:       make(map[int64]*jobmanager.JobManager),
 			config:            rawConfig,
 		}
 		cm.subclusters[key] = ce
@@ -67,43 +67,42 @@ func (cm *clusterManager) CloseJob(meta ccspecs.BaseJob) error {
 	sckey := fmt.Sprintf("%s-%s", meta.Cluster, meta.SubCluster)
 	sc, ok := cm.subclusters[sckey]
 	if !ok {
-		return fmt.Errorf("unknown cluster %s, cannot shutdown optimizer for job %d", sckey, meta.JobID)
+		return fmt.Errorf("unknown cluster %s, cannot shutdown JobManager for job %d", sckey, meta.JobID)
 	}
 
-	jmkey := fmt.Sprintf("%d", meta.JobID)
-	if jm, ok := sc.jobManagers[jmkey]; ok {
+	if jm, ok := sc.jobManagers[meta.JobID]; ok {
 		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), "Close jobmanager", jm)
 		jm.Close()
 	}
-	// Delete optimizer from the host->optimizer_list mapping
+	// Delete JobManager from the host->optimizer_list mapping
 	for _, r := range meta.Resources {
 		idx := -1
-		if olist, ok := sc.hostsToJobManager[r.Hostname]; ok {
+		if jobIds, ok := sc.hostToJobIds[r.Hostname]; ok {
 			// Find index in optimizer list
-			for i, test := range olist {
-				if test == jmkey {
+			for i, test := range jobIds {
+				if test == meta.JobID {
 					idx = i
 					break
 				}
 			}
 			if idx >= 0 {
-				// Delete optimizer from list
-				sc.hostsToJobManager[r.Hostname] = append(olist[:idx], olist[idx+1:]...)
-				cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Remove optimizer %s from optimizer lookup for %s", jmkey, r.Hostname))
+				// Delete JobManager from list
+				sc.hostToJobIds[r.Hostname] = append(jobIds[:idx], jobIds[idx+1:]...)
+				cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Remove JobManager %d from JobManager lookup for %s", meta.JobID, r.Hostname))
 			} else {
-				cclog.ComponentError(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Cannot find optimizer %s for %s", jmkey, r.Hostname))
+				cclog.ComponentError(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Cannot find JobManager %d for %s", meta.JobID, r.Hostname))
 			}
 		}
 	}
-	// Remove optimizer for job ID
-	if _, ok := sc.jobManagers[jmkey]; ok {
-		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Remove optimizer for %s", jmkey))
-		delete(sc.jobManagers, jmkey)
+	// Remove JobManager for job ID
+	if _, ok := sc.jobManagers[meta.JobID]; ok {
+		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Remove JobManager for %d", meta.JobID))
+		delete(sc.jobManagers, meta.JobID)
 	}
 	return nil
 }
 
-func (cm *clusterManager) registerJob(clusterName string, sckey string, jmkey string, resources []*ccspecs.Resource) {
+func (cm *clusterManager) registerJob(clusterName string, sckey string, jobId int64, resources []*ccspecs.Resource) {
 	cluster, ok := cm.subclusters[sckey]
 	if ok {
 		return
@@ -115,17 +114,15 @@ func (cm *clusterManager) registerJob(clusterName string, sckey string, jmkey st
 	jm, _ := jobmanager.NewJobManager(cm.wg, clusterName, resources, cluster.config)
 	jm.AddInput(jm.Input)
 
-	cluster.jobManagers[jmkey] = jm
+	cluster.jobManagers[jobId] = jm
 
 	for _, r := range resources {
 		// host is unknown, so create new optimizer list
-		if _, ok := cluster.hostsToJobManager[r.Hostname]; !ok {
-			cluster.hostsToJobManager[r.Hostname] = make([]string, 0)
+		if _, ok := cluster.hostToJobIds[r.Hostname]; !ok {
+			cluster.hostToJobIds[r.Hostname] = make([]int64, 0)
 		}
 		// Get list and add the job ID
-		olist := cluster.hostsToJobManager[r.Hostname]
-		olist = append(olist, jmkey)
-		cluster.hostsToJobManager[r.Hostname] = olist
+		cluster.hostToJobIds[r.Hostname] = append(cluster.hostToJobIds[r.Hostname], jobId)
 	}
 
 	jm.Start()
@@ -137,20 +134,20 @@ func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) {
 	}
 
 	for _, r := range meta.Resources {
-		cm.hostsToSubcluster[r.Hostname] = meta.SubCluster
+		cm.hostToSubcluster[r.Hostname] = meta.SubCluster
 	}
 
 	cm.registerJob(
 		meta.Cluster,
 		fmt.Sprintf("%s-%s", meta.Cluster, meta.SubCluster),
-		fmt.Sprintf("%d", meta.JobID),
+		meta.JobID,
 		meta.Resources)
 
 	if meta.NumAcc > 0 {
 		cm.registerJob(
 			meta.Cluster,
 			fmt.Sprintf("%s-%s-gpu", meta.Cluster, meta.SubCluster),
-			fmt.Sprintf("%d", meta.JobID),
+			meta.JobID,
 			meta.Resources)
 	}
 }
@@ -174,7 +171,7 @@ func getJob(payload string) (ccspecs.BaseJob, error) {
 }
 
 func (cm *clusterManager) getSubcluster(hostname string) (string, error) {
-	if subcluster, ok := cm.hostsToSubcluster[hostname]; ok {
+	if subcluster, ok := cm.hostToSubcluster[hostname]; ok {
 		return subcluster, nil
 	}
 	return "", fmt.Errorf("cannot find subcluster for host %s", hostname)
@@ -208,7 +205,7 @@ func (cm *clusterManager) Start() {
 							if !cm.isSupported(sckey) {
 								continue
 							}
-							for _, s := range cm.subclusters[sckey].hostsToJobManager[h] {
+							for _, s := range cm.subclusters[sckey].hostToJobIds[h] {
 								if jm, ok := cm.subclusters[sckey].jobManagers[s]; ok {
 									jm.Input <- m
 								}
@@ -266,7 +263,7 @@ func NewClusterManager(wg *sync.WaitGroup, config json.RawMessage) (ClusterManag
 	cm.wg = wg
 	cm.done = make(chan bool)
 	cm.subclusters = make(map[string]subclusterEntry)
-	cm.hostsToSubcluster = make(map[string]string)
+	cm.hostToSubcluster = make(map[string]string)
 
 	scConfigs := make(map[string]json.RawMessage)
 	err := json.Unmarshal(config, &scConfigs)
