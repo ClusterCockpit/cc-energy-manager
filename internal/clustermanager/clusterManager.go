@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"slices"
 
 	"github.com/ClusterCockpit/cc-energy-manager/internal/jobmanager"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
@@ -16,20 +17,30 @@ import (
 	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
 )
 
-type subclusterEntry struct {
-	name         string
-	hostToJobIds map[string][]int64
-	jobManagers  map[int64]*jobmanager.JobManager
-	config       json.RawMessage
+type JobManagerId struct {
+	DeviceType string
+	JobId int64
+}
+
+type SubClusterId struct {
+	Cluster           string
+	SubCluster        string
+}
+
+type SubCluster struct {
+	subClusterId      SubClusterId
+	hostToJobMgrIds   map[string][]JobManagerId
+	jobManagers       map[JobManagerId]*jobmanager.JobManager
+	deviceTypeToOptimizerConfig map[string]json.RawMessage
 }
 
 type clusterManager struct {
-	subclusters      map[string]subclusterEntry
-	done             chan bool
-	wg               *sync.WaitGroup
-	input            chan lp.CCMessage
-	output           chan lp.CCMessage
-	hostToSubcluster map[string]string
+	subClusters       map[SubClusterId]SubCluster
+	done              chan bool
+	wg                *sync.WaitGroup
+	input             chan lp.CCMessage
+	output            chan lp.CCMessage
+	hostToSubcluster  map[string]SubClusterId
 }
 
 type ClusterManager interface {
@@ -39,16 +50,45 @@ type ClusterManager interface {
 	Close()
 }
 
-func (cm *clusterManager) AddCluster(key string, rawConfig json.RawMessage) {
-	if _, ok := cm.subclusters[key]; !ok {
-		ce := subclusterEntry{
-			name:         key,
-			hostToJobIds: make(map[string][]int64),
-			jobManagers:  make(map[int64]*jobmanager.JobManager),
-			config:       rawConfig,
-		}
-		cm.subclusters[key] = ce
+func (jmid JobManagerId) String() string {
+	return fmt.Sprintf("%d-%s", jmid.JobId, jmid.DeviceType)
+}
+
+func (scid SubClusterId) String() string {
+	return fmt.Sprintf("%s-%s", scid.Cluster, scid.SubCluster)
+}
+
+func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
+	clusterConfig := struct{
+		Cluster        *string                    `json:"cluster"`
+		SubCluster     *string                    `json:"subcluster"`
+		DeviceTypes    map[string]json.RawMessage `json:"devicetypes"`
+	}{}
+	err := json.Unmarshal(rawClusterConfig, &clusterConfig)
+	if err != nil {
+		return fmt.Errorf("Unable to parse cluster JSON: %w", err)
 	}
+
+	if clusterConfig.Cluster == nil || clusterConfig.SubCluster == nil || clusterConfig.DeviceTypes == nil {
+		return fmt.Errorf("cluster config is missing 'cluster', 'subcluster', or 'devicetypes': %s", string(rawClusterConfig))
+	}
+
+	subClusterId := SubClusterId{
+		Cluster:    *clusterConfig.Cluster,
+		SubCluster: *clusterConfig.SubCluster,
+	}
+
+	if _, ok := cm.subClusters[subClusterId]; ok {
+		return fmt.Errorf("Cluster defined twice in config file: '%+v'", subClusterId)
+	}
+
+	cm.subClusters[subClusterId] = SubCluster{
+		subClusterId:      subClusterId,
+		hostToJobMgrIds:   make(map[string][]JobManagerId),
+		jobManagers:       make(map[JobManagerId]*jobmanager.JobManager),
+		deviceTypeToOptimizerConfig: clusterConfig.DeviceTypes,
+	}
+	return nil
 }
 
 func (cm *clusterManager) AddInput(input chan lp.CCMessage) {
@@ -59,107 +99,130 @@ func (cm *clusterManager) AddOutput(output chan lp.CCMessage) {
 	cm.output = output
 }
 
-func (cm *clusterManager) CloseJob(meta ccspecs.BaseJob) error {
+func (cm *clusterManager) StopJob(meta ccspecs.BaseJob) error {
 	if len(meta.Cluster) == 0 || meta.JobID == 0 {
 		return errors.New("job metadata does not contain data for cluster and jobid")
 	}
 
-	sckey := fmt.Sprintf("%s-%s", meta.Cluster, meta.SubCluster)
-	sc, ok := cm.subclusters[sckey]
-	if !ok {
-		return fmt.Errorf("unknown cluster %s, cannot shutdown JobManager for job %d", sckey, meta.JobID)
+	subClusterId := SubClusterId{
+		Cluster: meta.Cluster,
+		SubCluster: meta.SubCluster,
 	}
 
-	if jm, ok := sc.jobManagers[meta.JobID]; ok {
-		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), "Close jobmanager", jm)
-		jm.Close()
+	subCluster, ok := cm.subClusters[subClusterId]
+	if !ok {
+		return fmt.Errorf("Trying to stop a job on a cluster (%s), which we don't know", subClusterId)
 	}
-	// Delete JobManager from the host->optimizer_list mapping
-	for _, r := range meta.Resources {
-		idx := -1
-		if jobIds, ok := sc.hostToJobIds[r.Hostname]; ok {
-			// Find index in optimizer list
-			for i, test := range jobIds {
-				if test == meta.JobID {
-					idx = i
-					break
-				}
-			}
-			if idx >= 0 {
-				// Delete JobManager from list
-				sc.hostToJobIds[r.Hostname] = append(jobIds[:idx], jobIds[idx+1:]...)
-				cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Remove JobManager %d from JobManager lookup for %s", meta.JobID, r.Hostname))
-			} else {
-				cclog.ComponentError(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Cannot find JobManager %d for %s", meta.JobID, r.Hostname))
-			}
+
+	// Iterate over all device types and stop each associated JobManager
+	for deviceType, _ := range subCluster.deviceTypeToOptimizerConfig {
+		jobManagerId := JobManagerId{ DeviceType: deviceType, JobId: meta.JobID }
+		jobManager, ok := subCluster.jobManagers[jobManagerId]
+		if ok {
+			cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", jobManagerId), "Close jobmanager", jobManager)
+			jobManager.Close()
+			delete(subCluster.jobManagers, jobManagerId)
+		} else {
+			cclog.Errorf("Trying to stop ClusterManager(%s), which was never started", jobManagerId)
 		}
 	}
-	// Remove JobManager for job ID
-	if _, ok := sc.jobManagers[meta.JobID]; ok {
-		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Remove JobManager for %d", meta.JobID))
-		delete(sc.jobManagers, meta.JobID)
+
+	// Delete JobManagerIds, that are assoicated to a host
+	for _, r := range meta.Resources {
+		jobMgrIds, ok := subCluster.hostToJobMgrIds[r.Hostname]
+		if !ok {
+			cclog.Errorf("Host '%s' is not associated with any jobs", r.Hostname)
+			continue
+		}
+
+		// Delete all JobManagerIds, which are associated with the job's host, (for all device types)
+		deleteFunc := func(jobManagerId JobManagerId) bool {
+			return jobManagerId.JobId == meta.JobID
+		}
+
+		subCluster.hostToJobMgrIds[r.Hostname] = slices.DeleteFunc(jobMgrIds, deleteFunc)
+		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", subClusterId), fmt.Sprintf("Remove JobManager %d from JobManager lookup for %s", meta.JobID, r.Hostname))
 	}
+
 	return nil
 }
 
-func (cm *clusterManager) registerJob(clusterName string, sckey string, jobId int64, resources []*ccspecs.Resource) {
-	cluster, ok := cm.subclusters[sckey]
+func (cm *clusterManager) registerJob(subClusterId SubClusterId, jobManagerId JobManagerId, resources []*ccspecs.Resource) {
+	subCluster, ok := cm.subClusters[subClusterId]
 	if ok {
+		cclog.Errorf("Cannot register job for subCluster %s, which is not available.")
 		return
 	}
 
-	// TODO is cm.subclusters[sckey] == clusterName?
-	// if yes, then the parameter clusterName can be removed.
-	// To me the code suggests cm.subclusters[sckey] is the subcluster name, which I don't want
-	jm, _ := jobmanager.NewJobManager(cm.wg, clusterName, resources, cluster.config)
+	jobManagerConfig, ok := subCluster.deviceTypeToOptimizerConfig[jobManagerId.DeviceType]
+	if !ok {
+		cclog.Debugf("Not starting optimzier for deviceType %s, which has no optimizer configured", jobManagerId.DeviceType)
+		return
+	}
+
+	jm, err := jobmanager.NewJobManager(cm.wg, subClusterId.Cluster, resources, jobManagerConfig)
+	if err != nil {
+		cclog.Errorf("Unable to create job manager: %v", err)
+		return
+	}
+
 	jm.AddInput(jm.Input)
 
-	cluster.jobManagers[jobId] = jm
+	subCluster.jobManagers[jobManagerId] = jm
 
+	// Populate hostToJobMgrId Mapping
 	for _, r := range resources {
-		// host is unknown, so create new optimizer list
-		if _, ok := cluster.hostToJobIds[r.Hostname]; !ok {
-			cluster.hostToJobIds[r.Hostname] = make([]int64, 0)
+		// Initially, the hostToJobMgrId list may not exist, so create it
+		if _, ok := subCluster.hostToJobMgrIds[r.Hostname]; !ok {
+			subCluster.hostToJobMgrIds[r.Hostname] = make([]JobManagerId, 0)
 		}
-		// Get list and add the job ID
-		cluster.hostToJobIds[r.Hostname] = append(cluster.hostToJobIds[r.Hostname], jobId)
+
+		subCluster.hostToJobMgrIds[r.Hostname] = append(subCluster.hostToJobMgrIds[r.Hostname], jobManagerId)
 	}
 
 	jm.Start()
 }
 
-func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) {
+func (cm *clusterManager) StartJob(meta ccspecs.BaseJob) {
 	if len(meta.Cluster) == 0 || meta.JobID == 0 {
 		return
 	}
 
+	subClusterId := SubClusterId{
+		Cluster: meta.Cluster,
+		SubCluster: meta.SubCluster,
+	}
+
 	for _, r := range meta.Resources {
-		cm.hostToSubcluster[r.Hostname] = meta.SubCluster
+		cm.hostToSubcluster[r.Hostname] = subClusterId
 	}
 
-	cm.registerJob(
-		meta.Cluster,
-		fmt.Sprintf("%s-%s", meta.Cluster, meta.SubCluster),
-		meta.JobID,
-		meta.Resources)
+	// Start job for CPU Socket optimization
+	jobManagerIdSocket := JobManagerId{
+		DeviceType: "socket",
+		JobId: meta.JobID,
+	}
+	cm.registerJob(subClusterId, jobManagerIdSocket, meta.Resources)
 
+	// Start job for GPU optimization
 	if meta.NumAcc > 0 {
-		cm.registerJob(
-			meta.Cluster,
-			fmt.Sprintf("%s-%s-gpu", meta.Cluster, meta.SubCluster),
-			meta.JobID,
-			meta.Resources)
+		// Unconditionally start an optimizer for both Nvidia and AMD GPUs.
+		// If no such optimizer is configured, we will catch that later.
+		jobManagerIdNvGpu := JobManagerId{
+			DeviceType: "nvidia_gpu",
+			JobId: meta.JobID,
+		}
+		cm.registerJob(subClusterId, jobManagerIdNvGpu, meta.Resources)
+
+		jobManagerIdAmdGpu := JobManagerId{
+			DeviceType: "amd_gpu",
+			JobId: meta.JobID,
+		}
+		cm.registerJob(subClusterId, jobManagerIdAmdGpu, meta.Resources)
 	}
 }
 
-func (cm *clusterManager) isSupported(key string) bool {
-	if _, ok := cm.subclusters[key]; !ok {
-		return false
-	}
-
-	return true
-}
-
+// TODO, do we still need this?
 func getJob(payload string) (ccspecs.BaseJob, error) {
 	var job ccspecs.BaseJob
 	err := json.Unmarshal([]byte(payload), &job)
@@ -170,22 +233,76 @@ func getJob(payload string) (ccspecs.BaseJob, error) {
 	return job, nil
 }
 
-func (cm *clusterManager) getSubcluster(hostname string) (string, error) {
-	if subcluster, ok := cm.hostToSubcluster[hostname]; ok {
-		return subcluster, nil
+func (cm *clusterManager) getSubcluster(hostname string) (SubClusterId, error) {
+	if subClusterId, ok := cm.hostToSubcluster[hostname]; ok {
+		return subClusterId, nil
 	}
-	return "", fmt.Errorf("cannot find subcluster for host %s", hostname)
+	return SubClusterId{}, fmt.Errorf("cannot find subcluster for host %s", hostname)
 }
 
-func checkRequiredTags(msg lp.CCMessage, requiredTags []string) bool {
-	// TODO maybe this extra function isn't necessary after all...
-	for _, requiredTag := range requiredTags {
-		if _, ok := msg.GetTag(requiredTag); !ok {
-			cclog.Errorf("Incoming message is missing tag '%s': %+v", requiredTag, msg)
-			return false
+func (cm *clusterManager) processMetric(msg lp.CCMessage) {
+	// Forward this metric to all JobManagers running on nodes,
+	// that are currently associated with the message's hostname.
+	hostname, ok := msg.GetTag("hostname")
+	if !ok {
+		cclog.ComponentError("ClusterManager", "Incoming message is missing tag 'hostname': %+v", msg)
+		return
+	}
+
+	cluster, ok := msg.GetTag("cluster")
+	if !ok {
+		cclog.ComponentError("ClusterManager", "Incoming message is missing tag 'cluster': %+v", msg)
+		return
+	}
+
+	subClusterId, err := cm.getSubcluster(hostname)
+	if err != nil {
+		cclog.ComponentError("ClusterManager", err.Error())
+		return
+	}
+
+	if subClusterId.Cluster != cluster {
+		// This case should usually not occur
+		cclog.ComponentError("ClusterManager", "Received metric with inconsistent hostname <-> cluster mapping")
+	}
+
+	for _, jobMgrId := range cm.subClusters[subClusterId].hostToJobMgrIds[hostname] {
+		if jobManager, ok := cm.subClusters[subClusterId].jobManagers[jobMgrId]; ok {
+			jobManager.Input <- msg
 		}
 	}
-	return true
+}
+
+func (cm *clusterManager) processEvent(msg lp.CCMessage) {
+	if msg.Name() != "job" {
+		cclog.Debugf("Ignoring incoming non-job event: %+v", msg)
+		return
+	}
+
+	function, ok := msg.GetTag("function")
+	if !ok {
+		cclog.Error("Job event is missing tag 'function': %+v", msg)
+		return
+	}
+
+	switch function {
+	case "start_job":
+		job, err := getJob(msg.GetEventValue())
+		if err != nil {
+			cclog.ComponentError("ClusterManager", err.Error())
+			break
+		}
+		cm.StartJob(job)
+	case "stop_job":
+		job, err := getJob(msg.GetEventValue())
+		if err != nil {
+			cclog.ComponentError("ClusterManager", err.Error())
+			break
+		}
+		err = cm.StopJob(job)
+	default:
+		cclog.Warn("Unimplemented job event: %+v", msg)
+	}
 }
 
 func (cm *clusterManager) Start() {
@@ -203,62 +320,9 @@ func (cm *clusterManager) Start() {
 
 				switch mtype {
 				case lp.CCMSG_TYPE_METRIC:
-					// forward all metrics to all job optimizers running on this node
-					if !checkRequiredTags(m, []string{"hostname", "cluster"}) {
-						break
-					}
-
-					hostname, _ := m.GetTag("hostname")
-					cluster, _ := m.GetTag("cluster")
-					subcluster, err := cm.getSubcluster(hostname)
-					if err != nil {
-						cclog.ComponentError("ClusterManager", err.Error())
-						continue
-					}
-
-					// TODO this %s-%s key thing won't work properly, this needs rework
-					// We need support for a cluster-subcluster combination, which is identifiable
-					// regardless whether it uses a GPU or not.
-					sckey := fmt.Sprintf("%s-%s", cluster, subcluster)
-					if !cm.isSupported(sckey) {
-						continue
-					}
-
-					for _, s := range cm.subclusters[sckey].hostToJobIds[hostname] {
-						if jm, ok := cm.subclusters[sckey].jobManagers[s]; ok {
-							jm.Input <- m
-						}
-					}
+					cm.processMetric(m)
 				case lp.CCMSG_TYPE_EVENT:
-					if m.Name() != "job" {
-						break
-					}
-					function, ok := m.GetTag("function")
-					if !ok {
-						cclog.Errorf("Job event is missing tag 'function': %+v", m)
-						break
-					}
-
-					switch function {
-					case "start_job":
-						job, err := getJob(m.GetEventValue())
-						if err != nil {
-							cclog.ComponentError("ClusterManager", err.Error())
-							break
-						}
-						cm.NewJob(job)
-					case "stop_job":
-						job, err := getJob(m.GetEventValue())
-						if err != nil {
-							cclog.ComponentError("ClusterManager", err.Error())
-							break
-						}
-						err = cm.CloseJob(job)
-						if err != nil {
-							cclog.ComponentError("ClusterManager", err.Error())
-							break
-						}
-					}
+					cm.processEvent(m)
 				}
 			}
 		}
@@ -271,10 +335,10 @@ func (cm *clusterManager) Close() {
 	cm.done <- true
 	// Iterate over optimizers to and close them
 
-	for _, c := range cm.subclusters {
-		for ident, s := range c.jobManagers {
-			cclog.ComponentDebug("ClusterManager", "Send close to JobManager", ident)
-			s.Done <- true
+	for _, c := range cm.subClusters {
+		for jobManagerId, jobManager := range c.jobManagers {
+			cclog.ComponentDebug("ClusterManager", "Send close to JobManager", jobManagerId)
+			jobManager.Done <- true
 		}
 	}
 	cclog.ComponentDebug("ClusterManager", "All sessions closed")
@@ -288,19 +352,20 @@ func NewClusterManager(wg *sync.WaitGroup, config json.RawMessage) (ClusterManag
 
 	cm.wg = wg
 	cm.done = make(chan bool)
-	cm.subclusters = make(map[string]subclusterEntry)
-	cm.hostToSubcluster = make(map[string]string)
+	cm.subClusters = make(map[SubClusterId]SubCluster)
+	cm.hostToSubcluster = make(map[string]SubClusterId)
 
-	scConfigs := make(map[string]json.RawMessage)
-	err := json.Unmarshal(config, &scConfigs)
+	clusterConfigs := make([]json.RawMessage, 0)
+	err := json.Unmarshal(config, &clusterConfigs)
 	if err != nil {
 		cclog.ComponentError("ccConfig", err.Error())
 		return nil, err
 	}
 
-	for sc, scConfig := range scConfigs {
-		if _, ok := cm.subclusters[sc]; !ok {
-			cm.AddCluster(sc, scConfig)
+	for _, clusterConfig := range clusterConfigs {
+		err = cm.AddCluster(clusterConfig)
+		if err != nil {
+			return nil, fmt.Errorf("AddCluster() failed: %w", err)
 		}
 	}
 
