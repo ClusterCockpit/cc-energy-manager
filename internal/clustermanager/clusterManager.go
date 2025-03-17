@@ -177,6 +177,17 @@ func (cm *clusterManager) getSubcluster(hostname string) (string, error) {
 	return "", fmt.Errorf("cannot find subcluster for host %s", hostname)
 }
 
+func checkRequiredTags(msg lp.CCMessage, requiredTags []string) bool {
+	// TODO maybe this extra function isn't necessary after all...
+	for _, requiredTag := range requiredTags {
+		if _, ok := msg.GetTag(requiredTag); !ok {
+			cclog.Error("Incoming message is missing tag '%s': %+v", requiredTag, msg)
+			return false
+		}
+	}
+	return true
+}
+
 func (cm *clusterManager) Start() {
 	cm.wg.Add(1)
 	go func() {
@@ -193,45 +204,56 @@ func (cm *clusterManager) Start() {
 				switch mtype {
 				case lp.CCMSG_TYPE_METRIC:
 					// forward all metrics to all job optimizers running on this node
-					if h, ok := m.GetTag("hostname"); ok {
-						if cluster, ok := m.GetTag("cluster"); ok {
-							subcluster, err := cm.getSubcluster(h)
-							if err != nil {
-								cclog.ComponentError("ClusterManager", err.Error())
-								continue
-							}
+					if !checkRequiredTags(m, []string{"hostname", "cluster"}) {
+						break
+					}
 
-							sckey := fmt.Sprintf("%s-%s", cluster, subcluster)
-							if !cm.isSupported(sckey) {
-								continue
-							}
-							for _, s := range cm.subclusters[sckey].hostToJobIds[h] {
-								if jm, ok := cm.subclusters[sckey].jobManagers[s]; ok {
-									jm.Input <- m
-								}
-							}
+					hostname, _ := m.GetTag("hostname")
+					cluster, _ := m.GetTag("cluster")
+					subcluster, err := cm.getSubcluster(hostname)
+					if err != nil {
+						cclog.ComponentError("ClusterManager", err.Error())
+						continue
+					}
+
+					// TODO this %s-%s key thing won't work properly, this needs rework
+					// We need support for a cluster-subcluster combination, which is identifiable
+					// regardless whether it uses a GPU or not.
+					sckey := fmt.Sprintf("%s-%s", cluster, subcluster)
+					if !cm.isSupported(sckey) {
+						continue
+					}
+
+					for _, s := range cm.subclusters[sckey].hostToJobIds[hostname] {
+						if jm, ok := cm.subclusters[sckey].jobManagers[s]; ok {
+							jm.Input <- m
 						}
 					}
 				case lp.CCMSG_TYPE_EVENT:
-					if m.Name() == "job" {
-						if f, ok := m.GetTag("function"); ok {
-							switch f {
-							case "start_job":
-								job, err := getJob(m.GetEventValue())
-								if err != nil {
-									cclog.ComponentError("ClusterManager", err.Error())
-									break
-								}
-								cm.NewJob(job)
-							case "stop_job":
-								job, err := getJob(m.GetEventValue())
-								if err != nil {
-									cclog.ComponentError("ClusterManager", err.Error())
-									break
-								}
-								err = cm.CloseJob(job)
-							}
+					if m.Name() != "job" {
+						break
+					}
+					function, ok := m.GetTag("function")
+					if !ok {
+						cclog.Error("Job event is missing tag 'function': %+v", m)
+						break
+					}
+
+					switch function {
+					case "start_job":
+						job, err := getJob(m.GetEventValue())
+						if err != nil {
+							cclog.ComponentError("ClusterManager", err.Error())
+							break
 						}
+						cm.NewJob(job)
+					case "stop_job":
+						job, err := getJob(m.GetEventValue())
+						if err != nil {
+							cclog.ComponentError("ClusterManager", err.Error())
+							break
+						}
+						err = cm.CloseJob(job)
 					}
 				}
 			}
