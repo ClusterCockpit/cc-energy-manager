@@ -17,6 +17,7 @@
     {
       "cluster": "fritz",
       "subcluster": "main",
+      "device": "socket",
       "scope": "node",
       "aggregator": {
         "type": "last",
@@ -38,6 +39,7 @@
     {
       "cluster": "alex",
       "subcluster": "a100",
+      "device": "nvidia_gpu",
       "scope": "device",
       "aggregator": {
         "type": "last",
@@ -46,7 +48,7 @@
       },
       "control": {
         "name": "nvml.power_limit",
-        "type": "gpu"
+        "type": "nvidia_gpu"
       },
       "intervalConverged": "5m",
       "intervalSearch": "2m",
@@ -59,6 +61,7 @@
     {
       "cluster": "alex",
       "subcluster": "a100",
+      "device": "socket",
       "scope": "job",
       "aggregator": {
         "type": "lastJob",
