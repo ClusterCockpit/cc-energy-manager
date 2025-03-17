@@ -222,8 +222,7 @@ func (cm *clusterManager) StartJob(meta ccspecs.BaseJob) {
 	}
 }
 
-// TODO, do we still need this?
-func getJob(payload string) (ccspecs.BaseJob, error) {
+func unmarshalJob(payload string) (ccspecs.BaseJob, error) {
 	var job ccspecs.BaseJob
 	err := json.Unmarshal([]byte(payload), &job)
 	if err != nil {
@@ -287,14 +286,14 @@ func (cm *clusterManager) processEvent(msg lp.CCMessage) {
 
 	switch function {
 	case "start_job":
-		job, err := getJob(msg.GetEventValue())
+		job, err := unmarshalJob(msg.GetEventValue())
 		if err != nil {
 			cclog.ComponentError("ClusterManager", err.Error())
 			break
 		}
 		cm.StartJob(job)
 	case "stop_job":
-		job, err := getJob(msg.GetEventValue())
+		job, err := unmarshalJob(msg.GetEventValue())
 		if err != nil {
 			cclog.ComponentError("ClusterManager", err.Error())
 			break
