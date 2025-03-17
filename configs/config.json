@@ -17,67 +17,73 @@
     {
       "cluster": "fritz",
       "subcluster": "main",
-      "device": "socket",
-      "scope": "node",
-      "aggregator": {
-        "type": "last",
-        "energy": "cpu_energy",
-        "instructions": "instructions"
-      },
-      "control": {
-        "name": "rapl.pkg_power_limit1",
-        "type": "socket"
-      },
-      "intervalConverged": "10m",
-      "intervalSearch": "2m",
-      "tolerance": 5,
-      "borders": {
-        "lower": 60,
-        "upper": 700
+      "devicetypes" : {
+        "socket" : {
+          "scope": "node",
+          "aggregator": {
+          "type": "last",
+            "energy": "cpu_energy",
+            "instructions": "instructions"
+          },
+          "control": {
+            "name": "rapl.pkg_power_limit1",
+            "type": "socket"
+          },
+          "intervalConverged": "10m",
+          "intervalSearch": "2m",
+          "tolerance": 5,
+          "borders": {
+            "lower": 60,
+            "upper": 700
+          }
+          }
+        }
       }
     },
     {
       "cluster": "alex",
       "subcluster": "a100",
-      "device": "nvidia_gpu",
-      "scope": "device",
-      "aggregator": {
-        "type": "last",
-        "energy": "acc_power",
-        "instructions": "kernels"
-      },
-      "control": {
-        "name": "nvml.power_limit",
-        "type": "nvidia_gpu"
-      },
-      "intervalConverged": "5m",
-      "intervalSearch": "2m",
-      "tolerance": 5,
-      "borders": {
-        "lower": 80,
-        "upper": 1000
-      }
-    },
-    {
-      "cluster": "alex",
-      "subcluster": "a100",
-      "device": "socket",
-      "scope": "job",
-      "aggregator": {
-        "type": "lastJob",
-        "energy": "cpu_energy",
-        "instructions": "instructions"
-      },
-      "control": {
-        "name": "rapl.pkg_power_limit1",
-        "type": "socket"
-      },
-      "intervalConverged": "5m",
-      "intervalSearch": "2m",
-      "tolerance": 5,
-      "borders": {
-        "lower": 123,
-        "upper": 800
+      "devicetypes": {
+        "nvidia_gpu" : {
+          "scope": "device",
+          "aggregator": {
+            "type": "last",
+            "energy": "acc_power",
+            "instructions": "kernels"
+          },
+          "control": {
+            "name": "nvml.power_limit",
+            "type": "nvidia_gpu"
+          },
+          "intervalConverged": "5m",
+          "intervalSearch": "2m",
+          "tolerance": 5,
+          "borders": {
+            "lower": 80,
+            "upper": 1000
+          }
+        },
+        "socket" :{
+          "cluster": "alex",
+          "subcluster": "a100",
+          "scope": "job",
+          "aggregator": {
+            "type": "lastJob",
+            "energy": "cpu_energy",
+            "instructions": "instructions"
+          },
+          "control": {
+            "name": "rapl.pkg_power_limit1",
+            "type": "socket"
+          },
+          "intervalConverged": "5m",
+          "intervalSearch": "2m",
+          "tolerance": 5,
+          "borders": {
+            "lower": 123,
+            "upper": 800
+          }
+        }
       }
     }
   ]
