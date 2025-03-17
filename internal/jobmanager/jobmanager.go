@@ -108,62 +108,85 @@ func NewJobManager(wg *sync.WaitGroup, cluster string, resources []*ccspecs.Reso
 		return nil, fmt.Errorf("Invalid device to optimizer power for: %s", cfg.OptDeviceType)
 	}
 
+	/* The functions below initialize j.targetToOptimizer and j.targetToDevices */
 	if cfg.Scope == "job" {
 		/* Calculate global optimum for all devices on all nodes belonging to job.
 		 * Use one optimizer for everything. */
-		targetName := TargetName(nil, nil, nil)
-		j.targetToOptimizer[targetName], err = NewGssOptimizer(config)
-		if err != nil {
-			return nil, err
-		}
-
-		devices := make([]string, 0)
-		j.targetToDevices[targetName] = devices
-
-		for _, resource := range resources {
-			for _, deviceId := range controller.Instance.GetDeviceIdsForResources(cluster, cfg.OptDeviceType, resource) {
-				devices = append(devices, TargetName(&resource.Hostname, &cfg.OptDeviceType, &deviceId))
-			}
-		}
+		err = initScopeJob(&j, resources, cfg, config)
 	} else if cfg.Scope == "node" {
 		/* Calculate local optimum for each individual node of a job and apply it to all the devices of a node */
-
-		for _, resource := range resources {
-			/* Create one optimzer for each host */
-			targetName := TargetName(&resource.Hostname, nil, nil)
-			j.targetToOptimizer[targetName], err = NewGssOptimizer(config)
-			if err != nil {
-				return nil, err
-			}
-
-			devices := make([]string, 0)
-			j.targetToDevices[targetName] = devices
-
-			for _, deviceId := range controller.Instance.GetDeviceIdsForResources(cluster, cfg.OptDeviceType, resource) {
-				devices = append(devices, TargetName(&resource.Hostname, &cfg.OptDeviceType, &deviceId))
-			}
-		}
+		err = initScopeNode(&j, resources, cfg, config)
 	} else if cfg.Scope == "device" {
 		/* Calculate optimum individually for each device for each individual node. */
-
-		for _, resource := range resources {
-			for _, deviceId := range controller.Instance.GetDeviceIdsForResources(cluster, cfg.OptDeviceType, resource) {
-				/* Create one optimizer for each device on a host to optimize. */
-				targetName := TargetName(&resource.Hostname, &cfg.OptDeviceType, &deviceId)
-				j.targetToOptimizer[targetName], err = NewGssOptimizer(config)
-				if err != nil {
-					return nil, err
-				}
-				/* In "device" scope, `target` and `device` strings are indentical */
-				deviceName := targetName
-				j.targetToDevices[targetName] = []string{ deviceName }
-			}
-		}
+		err = initScopeDevice(&j, resources, cfg, config)
 	} else {
 		cclog.Fatal("Requested unsupported scope: %s", cfg.Scope)
 	}
 
+	if err != nil {
+		return nil, err
+	}
+
 	return &j, nil
+}
+
+func initScopeJob(j *JobManager, resources []*ccspecs.Resource, cfg optimizerConfig, rawCfg json.RawMessage) error {
+	var err error
+	targetName := TargetName(nil, nil, nil)
+	j.targetToOptimizer[targetName], err = NewGssOptimizer(rawCfg)
+	if err != nil {
+		return err
+	}
+
+	devices := make([]string, 0)
+
+	for _, resource := range resources {
+		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, cfg.OptDeviceType, resource) {
+			devices = append(devices, TargetName(&resource.Hostname, &cfg.OptDeviceType, &deviceId))
+		}
+	}
+
+	j.targetToDevices[targetName] = devices
+	return nil
+}
+
+func initScopeNode(j *JobManager, resources []*ccspecs.Resource, cfg optimizerConfig, rawCfg json.RawMessage) error {
+	var err error
+	for _, resource := range resources {
+		/* Create one optimzer for each host */
+		targetName := TargetName(&resource.Hostname, nil, nil)
+		j.targetToOptimizer[targetName], err = NewGssOptimizer(rawCfg)
+		if err != nil {
+			return err
+		}
+
+		devices := make([]string, 0)
+
+		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, cfg.OptDeviceType, resource) {
+			devices = append(devices, TargetName(&resource.Hostname, &cfg.OptDeviceType, &deviceId))
+		}
+
+		j.targetToDevices[targetName] = devices
+	}
+	return nil
+}
+
+func initScopeDevice(j *JobManager, resources []*ccspecs.Resource, cfg optimizerConfig, rawCfg json.RawMessage) error {
+	var err error
+	for _, resource := range resources {
+		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, cfg.OptDeviceType, resource) {
+			/* Create one optimizer for each device on a host to optimize. */
+			targetName := TargetName(&resource.Hostname, &cfg.OptDeviceType, &deviceId)
+			j.targetToOptimizer[targetName], err = NewGssOptimizer(rawCfg)
+			if err != nil {
+				return err
+			}
+			/* In "device" scope, `target` and `device` strings are indentical */
+			deviceName := targetName
+			j.targetToDevices[targetName] = []string{ deviceName }
+		}
+	}
+	return nil
 }
 
 func isSocketMetric(metric string) bool {
