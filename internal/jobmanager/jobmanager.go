@@ -24,27 +24,27 @@ type controlConfig struct {
 }
 
 type optimizerConfig struct {
-	Scope             string `json:"scope"`
-	OptDeviceType     string `json:"optDeviceType"`
-	AggCfg  json.RawMessage  `json:"aggregator"`
-	ControlCfg controlConfig `json:"control"`
-	IntervalConverged string `json:"intervalConverged"`
-	IntervalSearch    string `json:"intervalSearch"`
+	Scope             string          `json:"scope"`
+	OptDeviceType     string          `json:"optDeviceType"`
+	AggCfg            json.RawMessage `json:"aggregator"`
+	ControlCfg        controlConfig   `json:"control"`
+	IntervalConverged string          `json:"intervalConverged"`
+	IntervalSearch    string          `json:"intervalSearch"`
 }
 
 type JobManager struct {
-	wg         *sync.WaitGroup
-	Done       chan bool
-	Input      chan lp.CCMessage
-	interval   time.Duration
-	cluster    string
-	resources  []*ccspecs.Resource
-	aggregator aggregator.Aggregator
+	wg                *sync.WaitGroup
+	Done              chan bool
+	Input             chan lp.CCMessage
+	interval          time.Duration
+	cluster           string
+	resources         []*ccspecs.Resource
+	aggregator        aggregator.Aggregator
 	targetToOptimizer map[string]Optimizer
 	targetToDevices   map[string][]string
-	ticker     time.Ticker
-	started    bool
-	cfg        optimizerConfig
+	ticker            time.Ticker
+	started           bool
+	cfg               optimizerConfig
 }
 
 type Optimizer interface {
@@ -58,7 +58,7 @@ type Optimizer interface {
  * - 'node01/nvidia_gpu/00000000:00:3f.0' (device scope)
  * - 'node01'                             (node scope)
  * - ''                                   (job scope)
- * 
+ *
  * A `device` string is a `target` string, which must be at target scope. */
 func TargetName(hostname *string, deviceType *string, deviceId *string) string {
 	if hostname == nil {
@@ -83,15 +83,15 @@ func NewJobManager(wg *sync.WaitGroup, cluster string, resources []*ccspecs.Reso
 	}
 
 	j := JobManager{
-		wg:        wg,
-		Done:      make(chan bool),
-		started:   false,
+		wg:                wg,
+		Done:              make(chan bool),
+		started:           false,
 		targetToOptimizer: make(map[string]Optimizer),
-		targetToDevices: make(map[string][]string),
-		cfg:       cfg,
-		resources: resources,
-		aggregator: aggregator.New(cfg.AggCfg),
-		cluster:   cluster,
+		targetToDevices:   make(map[string][]string),
+		cfg:               cfg,
+		resources:         resources,
+		aggregator:        aggregator.New(cfg.AggCfg),
+		cluster:           cluster,
 	}
 
 	t, err := time.ParseDuration(cfg.IntervalSearch)
@@ -105,22 +105,23 @@ func NewJobManager(wg *sync.WaitGroup, cluster string, resources []*ccspecs.Reso
 
 	/* Assert a valid device type here, so that we don't have to check edge cases everywhere else. */
 	if cfg.OptDeviceType != "socket" && cfg.OptDeviceType != "nvidia_gpu" {
-		return nil, fmt.Errorf("Invalid device to optimizer power for: %s", cfg.OptDeviceType)
+		return nil, fmt.Errorf("invalid device to optimizer power for: %s", cfg.OptDeviceType)
 	}
 
 	/* The functions below initialize j.targetToOptimizer and j.targetToDevices */
-	if cfg.Scope == "job" {
+	switch cfg.Scope {
+	case "job":
 		/* Calculate global optimum for all devices on all nodes belonging to job.
 		 * Use one optimizer for everything. */
 		err = initScopeJob(&j, resources, cfg, config)
-	} else if cfg.Scope == "node" {
+	case "node":
 		/* Calculate local optimum for each individual node of a job and apply it to all the devices of a node */
 		err = initScopeNode(&j, resources, cfg, config)
-	} else if cfg.Scope == "device" {
+	case "device":
 		/* Calculate optimum individually for each device for each individual node. */
 		err = initScopeDevice(&j, resources, cfg, config)
-	} else {
-		cclog.Fatal("Requested unsupported scope: %s", cfg.Scope)
+	default:
+		cclog.Fatalf("Requested unsupported scope: %s", cfg.Scope)
 	}
 
 	if err != nil {
@@ -183,7 +184,7 @@ func initScopeDevice(j *JobManager, resources []*ccspecs.Resource, cfg optimizer
 			}
 			/* In "device" scope, `target` and `device` strings are indentical */
 			deviceName := targetName
-			j.targetToDevices[targetName] = []string{ deviceName }
+			j.targetToDevices[targetName] = []string{deviceName}
 		}
 	}
 	return nil
@@ -244,7 +245,7 @@ func (j *JobManager) Start() {
 				}
 
 				for target, optimizer := range j.targetToOptimizer {
-					optimum := fmt.Sprintf("%f", optimizer.Update(aggregatedMetrics[target]))
+					optimum := fmt.Sprintf("%d", optimizer.Update(aggregatedMetrics[target]))
 
 					for _, device := range j.targetToDevices[target] {
 						/* `device` is a full string like: "node01/nvidia_gpu/00000000:1f.2.0" */

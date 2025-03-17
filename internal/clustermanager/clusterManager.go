@@ -17,19 +17,19 @@ import (
 )
 
 type subclusterEntry struct {
-	name              string
-	hostToJobIds      map[string][]int64
-	jobManagers       map[int64]*jobmanager.JobManager
-	config            json.RawMessage
+	name         string
+	hostToJobIds map[string][]int64
+	jobManagers  map[int64]*jobmanager.JobManager
+	config       json.RawMessage
 }
 
 type clusterManager struct {
-	subclusters       map[string]subclusterEntry
-	done              chan bool
-	wg                *sync.WaitGroup
-	input             chan lp.CCMessage
-	output            chan lp.CCMessage
-	hostToSubcluster  map[string]string
+	subclusters      map[string]subclusterEntry
+	done             chan bool
+	wg               *sync.WaitGroup
+	input            chan lp.CCMessage
+	output           chan lp.CCMessage
+	hostToSubcluster map[string]string
 }
 
 type ClusterManager interface {
@@ -42,10 +42,10 @@ type ClusterManager interface {
 func (cm *clusterManager) AddCluster(key string, rawConfig json.RawMessage) {
 	if _, ok := cm.subclusters[key]; !ok {
 		ce := subclusterEntry{
-			name:              key,
-			hostToJobIds:      make(map[string][]int64),
-			jobManagers:       make(map[int64]*jobmanager.JobManager),
-			config:            rawConfig,
+			name:         key,
+			hostToJobIds: make(map[string][]int64),
+			jobManagers:  make(map[int64]*jobmanager.JobManager),
+			config:       rawConfig,
 		}
 		cm.subclusters[key] = ce
 	}
@@ -181,7 +181,7 @@ func checkRequiredTags(msg lp.CCMessage, requiredTags []string) bool {
 	// TODO maybe this extra function isn't necessary after all...
 	for _, requiredTag := range requiredTags {
 		if _, ok := msg.GetTag(requiredTag); !ok {
-			cclog.Error("Incoming message is missing tag '%s': %+v", requiredTag, msg)
+			cclog.Errorf("Incoming message is missing tag '%s': %+v", requiredTag, msg)
 			return false
 		}
 	}
@@ -235,7 +235,7 @@ func (cm *clusterManager) Start() {
 					}
 					function, ok := m.GetTag("function")
 					if !ok {
-						cclog.Error("Job event is missing tag 'function': %+v", m)
+						cclog.Errorf("Job event is missing tag 'function': %+v", m)
 						break
 					}
 
@@ -254,6 +254,10 @@ func (cm *clusterManager) Start() {
 							break
 						}
 						err = cm.CloseJob(job)
+						if err != nil {
+							cclog.ComponentError("ClusterManager", err.Error())
+							break
+						}
 					}
 				}
 			}

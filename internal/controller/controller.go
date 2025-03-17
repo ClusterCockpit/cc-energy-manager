@@ -7,19 +7,17 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"time"
-	"sync"
-	"strings"
 	"strconv"
+	"strings"
+	"sync"
+	"time"
 
-	cccontrol "github.com/ClusterCockpit/cc-node-controller/pkg/ccControlClient"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
+	cccontrol "github.com/ClusterCockpit/cc-node-controller/pkg/ccControlClient"
 )
 
-var (
-	Instance Controller
-)
+var Instance Controller
 
 type Controller interface {
 	Set(cluster string, deviceString string, control string, value string) error
@@ -28,8 +26,8 @@ type Controller interface {
 }
 
 type ccControllerConfig struct {
-	Nats cccontrol.NatsConfig `json:"nats"`
-	ToposMaxAge int64 `json:"toposMaxAge"`
+	Nats        cccontrol.NatsConfig `json:"nats"`
+	ToposMaxAge int64                `json:"toposMaxAge"`
 }
 
 type ccController struct {
@@ -37,14 +35,14 @@ type ccController struct {
 	 * Since we need a subject per cluster, instantiate one CCControlClient
 	 * for each subject (thus cluster). */
 	controlClientsMutex sync.Mutex
-	controlClients map[string]cccontrol.CCControlClient
+	controlClients      map[string]cccontrol.CCControlClient
 
 	/* Map of hostname to topology. Cache previously requested toplogies to
 	 * avoid roundtrips to cc-node-controller. */
-	toposMutex sync.Mutex
+	toposMutex     sync.Mutex
 	toposLastClear time.Time
-	toposMaxAge time.Duration
-	topos map[string]cccontrol.CCControlTopology
+	toposMaxAge    time.Duration
+	topos          map[string]cccontrol.CCControlTopology
 
 	nats cccontrol.NatsConfig
 }
@@ -73,7 +71,7 @@ func (c *ccController) Set(cluster string, deviceString string, control string, 
 	deviceStringComponents := strings.Split(deviceString, "/")
 	if len(deviceStringComponents) != 3 {
 		// This case should not occur if we pass parameters with the right format
-		cclog.Fatal("Invalid argument: Cannot decompose device string: '%s'", deviceString)
+		cclog.Fatalf("Invalid argument: Cannot decompose device string: '%s'", deviceString)
 	}
 
 	hostname := deviceStringComponents[0]
@@ -82,13 +80,14 @@ func (c *ccController) Set(cluster string, deviceString string, control string, 
 
 	controlClient, err := getControlClient(c, cluster)
 	if err != nil {
-		cclog.Error("getControlClient() failed: %v", err)
+		cclog.Errorf("getControlClient() failed: %v", err)
 		return err
 	}
 
 	err = controlClient.SetControlValue(hostname, control, deviceType, deviceId, value)
 	if err != nil {
-		cclog.Warn("Setting control '%s' on host '%s' on cluster '%s' to value '%s' failed: %v", control, hostname, cluster, value)
+		cclog.Warnf("Setting control '%s' on host '%s' on cluster '%s' to value '%s' failed: %v",
+			control, hostname, cluster, value, err)
 	}
 
 	/* If setting a control fails, this is non fatal for cc-energy-manager's execution. Emitting
@@ -105,7 +104,7 @@ func getControlClient(c *ccController, cluster string) (cccontrol.CCControlClien
 	defer c.controlClientsMutex.Unlock()
 	if _, ok := c.controlClients[cluster]; !ok {
 		/* If we don't have a CCControlClient for the required cluster in our map, create a new one */
-		cclog.Debug("No CCControlClient found for cluster %s. Creating new one", cluster)
+		cclog.Debugf("No CCControlClient found for cluster %s. Creating new one", cluster)
 
 		// FIXME make the NATS subject properly configurable:
 		// Currently is is fixed to the cluster name.
@@ -131,17 +130,18 @@ func (c *ccController) Cleanup() {
 }
 
 func (c *ccController) GetDeviceIdsForResources(cluster string, deviceType string, resource *ccspecs.Resource) []string {
-	if deviceType == "socket" {
+	switch deviceType {
+	case "socket":
 		sockets, err := hwthreadsToSockets(c, cluster, resource.Hostname, resource.HWThreads)
 		if err != nil {
 			cclog.Errorf("Unable to convert hwthreads to sockets: %v", err)
 			return make([]string, 0)
 		}
 		return sockets
-	} else if deviceType == "nvidia_gpu" {
+	case "nvidia_gpu":
 		return resource.Accelerators
-	} else {
-		cclog.Fatal("GetDeviceIdsForResources: Unsupported device '%s'. Please fix the configuration")
+	default:
+		cclog.Fatalf("GetDeviceIdsForResources: Unsupported device '%s'. Please fix the configuration", deviceType)
 		return nil
 	}
 }
@@ -166,7 +166,7 @@ func hwthreadsToSockets(c *ccController, cluster string, host string, hwthreads 
 	}
 
 	results := make([]string, 0)
-	for socket, _ := range sockets {
+	for socket := range sockets {
 		results = append(results, strconv.Itoa(socket))
 	}
 
@@ -199,6 +199,6 @@ func getTopoForHost(c *ccController, cluster string, hostname string) (*cccontro
 	}
 
 	/* If we get here, the value must exist in the map. */
-	topo, _ := c.topos[hostname]
+	topo := c.topos[hostname]
 	return &topo, nil
 }
