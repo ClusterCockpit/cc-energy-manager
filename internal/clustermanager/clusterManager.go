@@ -60,91 +60,98 @@ func (cm *clusterManager) AddOutput(output chan lp.CCMessage) {
 }
 
 func (cm *clusterManager) CloseJob(meta ccspecs.BaseJob) error {
-	if len(meta.Cluster) > 0 && meta.JobID > 0 {
-		sckey := fmt.Sprintf("%s-%s", meta.Cluster, meta.SubCluster)
-		if sc, ok := cm.subclusters[sckey]; ok {
-			jmkey := fmt.Sprintf("%d", meta.JobID)
-			if jm, ok := sc.jobManagers[jmkey]; ok {
-				cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), "Close jobmanager", jm)
-				jm.Close()
-			}
-			// Delete optimizer from the host->optimizer_list mapping
-			for _, r := range meta.Resources {
-				idx := -1
-				if olist, ok := sc.hostsToJobManager[r.Hostname]; ok {
-					// Find index in optimizer list
-					for i, test := range olist {
-						if test == jmkey {
-							idx = i
-							break
-						}
-					}
-					if idx >= 0 {
-						// Delete optimizer from list
-						sc.hostsToJobManager[r.Hostname] = append(olist[:idx], olist[idx+1:]...)
-						cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Remove optimizer %s from optimizer lookup for %s", jmkey, r.Hostname))
-					} else {
-						cclog.ComponentError(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Cannot find optimizer %s for %s", jmkey, r.Hostname))
-					}
+	if len(meta.Cluster) == 0 || meta.JobID == 0 {
+		return errors.New("job metadata does not contain data for cluster and jobid")
+	}
+
+	sckey := fmt.Sprintf("%s-%s", meta.Cluster, meta.SubCluster)
+	sc, ok := cm.subclusters[sckey]
+	if !ok {
+		return fmt.Errorf("unknown cluster %s, cannot shutdown optimizer for job %d", sckey, meta.JobID)
+	}
+
+	jmkey := fmt.Sprintf("%d", meta.JobID)
+	if jm, ok := sc.jobManagers[jmkey]; ok {
+		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), "Close jobmanager", jm)
+		jm.Close()
+	}
+	// Delete optimizer from the host->optimizer_list mapping
+	for _, r := range meta.Resources {
+		idx := -1
+		if olist, ok := sc.hostsToJobManager[r.Hostname]; ok {
+			// Find index in optimizer list
+			for i, test := range olist {
+				if test == jmkey {
+					idx = i
+					break
 				}
 			}
-			// Remove optimizer for job ID
-			if _, ok := sc.jobManagers[jmkey]; ok {
-				cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Remove optimizer for %s", jmkey))
-				delete(sc.jobManagers, jmkey)
+			if idx >= 0 {
+				// Delete optimizer from list
+				sc.hostsToJobManager[r.Hostname] = append(olist[:idx], olist[idx+1:]...)
+				cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Remove optimizer %s from optimizer lookup for %s", jmkey, r.Hostname))
+			} else {
+				cclog.ComponentError(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Cannot find optimizer %s for %s", jmkey, r.Hostname))
 			}
-			return nil
-		} else {
-			return fmt.Errorf("unknown cluster %s, cannot shutdown optimizer for job %d", sckey, meta.JobID)
 		}
 	}
-	return errors.New("job metadata does not contain data for cluster and jobid")
+	// Remove optimizer for job ID
+	if _, ok := sc.jobManagers[jmkey]; ok {
+		cclog.ComponentDebug(fmt.Sprintf("ClusterManager(%s)", sckey), fmt.Sprintf("Remove optimizer for %s", jmkey))
+		delete(sc.jobManagers, jmkey)
+	}
+	return nil
 }
 
 func (cm *clusterManager) registerJob(clusterName string, sckey string, jmkey string, resources []*ccspecs.Resource) {
-	if cluster, ok := cm.subclusters[sckey]; !ok {
-		// TODO is cm.subclusters[sckey] == clusterName?
-		// if yes, then the parameter clusterName can be removed.
-		// To me the code suggests cm.subclusters[sckey] is the subcluster name, which I don't want
-		jm, _ := jobmanager.NewJobManager(cm.wg, clusterName, resources, cluster.config)
-		jm.AddInput(jm.Input)
-
-		cluster.jobManagers[jmkey] = jm
-
-		for _, r := range resources {
-			// host is unknown, so create new optimizer list
-			if _, ok := cluster.hostsToJobManager[r.Hostname]; !ok {
-				cluster.hostsToJobManager[r.Hostname] = make([]string, 0)
-			}
-			// Get list and add the job ID
-			olist := cluster.hostsToJobManager[r.Hostname]
-			olist = append(olist, jmkey)
-			cluster.hostsToJobManager[r.Hostname] = olist
-		}
-
-		jm.Start()
+	cluster, ok := cm.subclusters[sckey]
+	if ok {
+		return
 	}
+
+	// TODO is cm.subclusters[sckey] == clusterName?
+	// if yes, then the parameter clusterName can be removed.
+	// To me the code suggests cm.subclusters[sckey] is the subcluster name, which I don't want
+	jm, _ := jobmanager.NewJobManager(cm.wg, clusterName, resources, cluster.config)
+	jm.AddInput(jm.Input)
+
+	cluster.jobManagers[jmkey] = jm
+
+	for _, r := range resources {
+		// host is unknown, so create new optimizer list
+		if _, ok := cluster.hostsToJobManager[r.Hostname]; !ok {
+			cluster.hostsToJobManager[r.Hostname] = make([]string, 0)
+		}
+		// Get list and add the job ID
+		olist := cluster.hostsToJobManager[r.Hostname]
+		olist = append(olist, jmkey)
+		cluster.hostsToJobManager[r.Hostname] = olist
+	}
+
+	jm.Start()
 }
 
 func (cm *clusterManager) NewJob(meta ccspecs.BaseJob) {
-	if len(meta.Cluster) > 0 && meta.JobID > 0 {
-		for _, r := range meta.Resources {
-			cm.hostsToSubcluster[r.Hostname] = meta.SubCluster
-		}
+	if len(meta.Cluster) == 0 || meta.JobID == 0 {
+		return
+	}
 
+	for _, r := range meta.Resources {
+		cm.hostsToSubcluster[r.Hostname] = meta.SubCluster
+	}
+
+	cm.registerJob(
+		meta.Cluster,
+		fmt.Sprintf("%s-%s", meta.Cluster, meta.SubCluster),
+		fmt.Sprintf("%d", meta.JobID),
+		meta.Resources)
+
+	if meta.NumAcc > 0 {
 		cm.registerJob(
 			meta.Cluster,
-			fmt.Sprintf("%s-%s", meta.Cluster, meta.SubCluster),
+			fmt.Sprintf("%s-%s-gpu", meta.Cluster, meta.SubCluster),
 			fmt.Sprintf("%d", meta.JobID),
 			meta.Resources)
-
-		if meta.NumAcc > 0 {
-			cm.registerJob(
-				meta.Cluster,
-				fmt.Sprintf("%s-%s-gpu", meta.Cluster, meta.SubCluster),
-				fmt.Sprintf("%d", meta.JobID),
-				meta.Resources)
-		}
 	}
 }
 
@@ -265,16 +272,13 @@ func NewClusterManager(wg *sync.WaitGroup, config json.RawMessage) (ClusterManag
 	err := json.Unmarshal(config, &scConfigs)
 	if err != nil {
 		cclog.ComponentError("ccConfig", err.Error())
+		return nil, err
 	}
 
 	for sc, scConfig := range scConfigs {
 		if _, ok := cm.subclusters[sc]; !ok {
 			cm.AddCluster(sc, scConfig)
 		}
-	}
-
-	if err != nil {
-		return nil, err
 	}
 
 	return cm, nil
