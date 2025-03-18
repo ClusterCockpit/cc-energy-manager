@@ -132,7 +132,7 @@ func (c *ccController) Cleanup() {
 func (c *ccController) GetDeviceIdsForResources(cluster string, deviceType string, resource *ccspecs.Resource) []string {
 	switch deviceType {
 	case "socket":
-		sockets, err := hwthreadsToSockets(c, cluster, resource.Hostname, resource.HWThreads)
+		sockets, err := c.hwthreadsToSockets(cluster, resource.Hostname, resource.HWThreads)
 		if err != nil {
 			cclog.Errorf("Unable to convert hwthreads to sockets: %v", err)
 			return make([]string, 0)
@@ -146,12 +146,12 @@ func (c *ccController) GetDeviceIdsForResources(cluster string, deviceType strin
 	}
 }
 
-func hwthreadsToSockets(c *ccController, cluster string, host string, hwthreads []int) ([]string, error) {
+func (c *ccController) hwthreadsToSockets(cluster string, host string, hwthreads []int) ([]string, error) {
 	/* Returns a list of sockets belonging to specified hardware threads.
 	 * Values are returned as strings for convenience, since we never really need
 	 * them as integers. */
 
-	topo, err := getTopoForHost(c, cluster, host)
+	topo, err := c.getTopoForHost(cluster, host)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func hwthreadsToSockets(c *ccController, cluster string, host string, hwthreads 
 	return results, nil
 }
 
-func getTopoForHost(c *ccController, cluster string, hostname string) (*cccontrol.CCControlTopology, error) {
+func (c *ccController) getTopoForHost(cluster string, hostname string) (*cccontrol.CCControlTopology, error) {
 	curTime := time.Now()
 	if c.toposLastClear.Add(c.toposMaxAge).Before(curTime) {
 		cclog.Debug("Clearing node topology cache")
