@@ -21,9 +21,10 @@ type LastAggregator struct {
 	energy       map[string]float64
 	instructions map[string]float64
 	metrics      map[string]string
+	scope        string
 }
 
-func NewLastAggregator(rawConfig json.RawMessage) (*LastAggregator, error) {
+func NewLastAggregator(scope string, rawConfig json.RawMessage) (*LastAggregator, error) {
 	ag := &LastAggregator{}
 	var config LastAggregatorConfig
 
@@ -41,6 +42,7 @@ func NewLastAggregator(rawConfig json.RawMessage) (*LastAggregator, error) {
 	ag.metrics["instructions"] = config.Instructions
 	ag.energy = make(map[string]float64)
 	ag.instructions = make(map[string]float64)
+	ag.scope = scope
 
 	return ag, nil
 }

@@ -18,7 +18,7 @@ type Aggregator interface {
 	Get() map[string]float64
 }
 
-func New(rawConfig json.RawMessage) Aggregator {
+func New(scope string, rawConfig json.RawMessage) Aggregator {
 	var err error
 	var ag Aggregator
 
@@ -33,9 +33,9 @@ func New(rawConfig json.RawMessage) Aggregator {
 
 	switch cfg.Type {
 	case "last":
-		ag, _ = NewLastAggregator(rawConfig)
+		ag, _ = NewLastAggregator(scope, rawConfig)
 	case "median":
-		ag, _ = NewMedianAggregator(rawConfig)
+		ag, _ = NewMedianAggregator(scope, rawConfig)
 	default:
 		cclog.Errorf("Unknown aggregator %s", cfg.Type)
 	}

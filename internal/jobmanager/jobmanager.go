@@ -85,7 +85,7 @@ func NewJobManager(wg *sync.WaitGroup, cluster string, deviceType string, resour
 		targetToDevices:   make(map[string][]string),
 		cfg:               cfg,
 		resources:         resources,
-		aggregator:        aggregator.New(cfg.AggCfg),
+		aggregator:        aggregator.New(cfg.Scope, cfg.AggCfg),
 		cluster:           cluster,
 		deviceType:        deviceType,
 	}

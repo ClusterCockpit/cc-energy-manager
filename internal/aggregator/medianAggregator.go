@@ -22,9 +22,10 @@ type MedianAggregator struct {
 	energy       map[string][]float64
 	instructions map[string][]float64
 	metrics      map[string]string
+	scope        string
 }
 
-func NewMedianAggregator(rawConfig json.RawMessage) (*MedianAggregator, error) {
+func NewMedianAggregator(scope string, rawConfig json.RawMessage) (*MedianAggregator, error) {
 	ag := &MedianAggregator{}
 	var config MedianAggregatorConfig
 
@@ -42,6 +43,7 @@ func NewMedianAggregator(rawConfig json.RawMessage) (*MedianAggregator, error) {
 	ag.metrics["instructions"] = config.Instructions
 	ag.energy = make(map[string][]float64)
 	ag.instructions = make(map[string][]float64)
+	ag.scope = scope
 
 	return ag, nil
 }
