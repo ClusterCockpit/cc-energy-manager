@@ -25,10 +25,7 @@
             "energy": "cpu_energy",
             "instructions": "instructions"
           },
-          "control": {
-            "name": "rapl.pkg_power_limit1",
-            "type": "socket"
-          },
+          "controlName": "rapl.pkg_power_limit1",
           "intervalConverged": "10m",
           "intervalSearch": "2m",
           "tolerance": 5,
@@ -50,10 +47,7 @@
             "energy": "acc_power",
             "instructions": "kernels"
           },
-          "control": {
-            "name": "nvml.power_limit",
-            "type": "nvidia_gpu"
-          },
+          "controlName": "nvml.power_limit",
           "intervalConverged": "5m",
           "intervalSearch": "2m",
           "tolerance": 5,
@@ -71,10 +65,7 @@
             "energy": "cpu_energy",
             "instructions": "instructions"
           },
-          "control": {
-            "name": "rapl.pkg_power_limit1",
-            "type": "socket"
-          },
+          "controlName": "rapl.pkg_power_limit1",
           "intervalConverged": "5m",
           "intervalSearch": "2m",
           "tolerance": 5,

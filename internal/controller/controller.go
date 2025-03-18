@@ -140,6 +140,8 @@ func (c *ccController) GetDeviceIdsForResources(cluster string, deviceType strin
 		return sockets
 	case "nvidia_gpu":
 		return resource.Accelerators
+	case "amd_gpu":
+		return resource.Accelerators
 	default:
 		cclog.Fatalf("GetDeviceIdsForResources: Unsupported device '%s'. Please fix the configuration", deviceType)
 		return nil

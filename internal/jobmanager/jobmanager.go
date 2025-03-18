@@ -18,16 +18,10 @@ import (
 	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
 )
 
-type controlConfig struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
-}
-
 type optimizerConfig struct {
 	Scope             string          `json:"scope"`
-	OptDeviceType     string          `json:"optDeviceType"`
 	AggCfg            json.RawMessage `json:"aggregator"`
-	ControlCfg        controlConfig   `json:"control"`
+	ControlName       string          `json:"controlName"`
 	IntervalConverged string          `json:"intervalConverged"`
 	IntervalSearch    string          `json:"intervalSearch"`
 }
@@ -45,6 +39,7 @@ type JobManager struct {
 	ticker            time.Ticker
 	started           bool
 	cfg               optimizerConfig
+	deviceType        string
 }
 
 type Optimizer interface {
@@ -70,7 +65,7 @@ func TargetName(hostname *string, deviceType *string, deviceId *string) string {
 	return *hostname
 }
 
-func NewJobManager(wg *sync.WaitGroup, cluster string, resources []*ccspecs.Resource,
+func NewJobManager(wg *sync.WaitGroup, cluster string, deviceType string, resources []*ccspecs.Resource,
 	config json.RawMessage,
 ) (*JobManager, error) {
 	var cfg optimizerConfig
@@ -92,6 +87,7 @@ func NewJobManager(wg *sync.WaitGroup, cluster string, resources []*ccspecs.Reso
 		resources:         resources,
 		aggregator:        aggregator.New(cfg.AggCfg),
 		cluster:           cluster,
+		deviceType:        deviceType,
 	}
 
 	t, err := time.ParseDuration(cfg.IntervalSearch)
@@ -102,11 +98,6 @@ func NewJobManager(wg *sync.WaitGroup, cluster string, resources []*ccspecs.Reso
 	}
 
 	j.interval = t
-
-	/* Assert a valid device type here, so that we don't have to check edge cases everywhere else. */
-	if cfg.OptDeviceType != "socket" && cfg.OptDeviceType != "nvidia_gpu" {
-		return nil, fmt.Errorf("invalid device to optimizer power for: %s", cfg.OptDeviceType)
-	}
 
 	/* The functions below initialize j.targetToOptimizer and j.targetToDevices */
 	switch cfg.Scope {
@@ -142,8 +133,8 @@ func initScopeJob(j *JobManager, resources []*ccspecs.Resource, cfg optimizerCon
 	devices := make([]string, 0)
 
 	for _, resource := range resources {
-		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, cfg.OptDeviceType, resource) {
-			devices = append(devices, TargetName(&resource.Hostname, &cfg.OptDeviceType, &deviceId))
+		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, j.deviceType, resource) {
+			devices = append(devices, TargetName(&resource.Hostname, &j.deviceType, &deviceId))
 		}
 	}
 
@@ -163,8 +154,8 @@ func initScopeNode(j *JobManager, resources []*ccspecs.Resource, cfg optimizerCo
 
 		devices := make([]string, 0)
 
-		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, cfg.OptDeviceType, resource) {
-			devices = append(devices, TargetName(&resource.Hostname, &cfg.OptDeviceType, &deviceId))
+		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, j.deviceType, resource) {
+			devices = append(devices, TargetName(&resource.Hostname, &j.deviceType, &deviceId))
 		}
 
 		j.targetToDevices[targetName] = devices
@@ -175,9 +166,9 @@ func initScopeNode(j *JobManager, resources []*ccspecs.Resource, cfg optimizerCo
 func initScopeDevice(j *JobManager, resources []*ccspecs.Resource, cfg optimizerConfig, rawCfg json.RawMessage) error {
 	var err error
 	for _, resource := range resources {
-		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, cfg.OptDeviceType, resource) {
+		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, j.deviceType, resource) {
 			/* Create one optimizer for each device on a host to optimize. */
-			targetName := TargetName(&resource.Hostname, &cfg.OptDeviceType, &deviceId)
+			targetName := TargetName(&resource.Hostname, &j.deviceType, &deviceId)
 			j.targetToOptimizer[targetName], err = NewGssOptimizer(rawCfg)
 			if err != nil {
 				return err
@@ -249,7 +240,7 @@ func (j *JobManager) Start() {
 
 					for _, device := range j.targetToDevices[target] {
 						/* `device` is a full string like: "node01/nvidia_gpu/00000000:1f.2.0" */
-						controller.Instance.Set(j.cluster, device, j.cfg.ControlCfg.Name, optimum)
+						controller.Instance.Set(j.cluster, device, j.cfg.ControlName, optimum)
 					}
 				}
 			}
