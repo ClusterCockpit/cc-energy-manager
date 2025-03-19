@@ -232,13 +232,6 @@ func unmarshalJob(payload string) (ccspecs.BaseJob, error) {
 	return job, nil
 }
 
-func (cm *clusterManager) getSubcluster(hostname string) (SubClusterId, error) {
-	if subClusterId, ok := cm.hostToSubcluster[hostname]; ok {
-		return subClusterId, nil
-	}
-	return SubClusterId{}, fmt.Errorf("cannot find subcluster for host %s", hostname)
-}
-
 func (cm *clusterManager) processMetric(msg lp.CCMessage) {
 	// Forward this metric to all JobManagers running on nodes,
 	// that are currently associated with the message's hostname.
@@ -259,9 +252,11 @@ func (cm *clusterManager) processMetric(msg lp.CCMessage) {
 		return
 	}
 
-	subClusterId, err := cm.getSubcluster(hostname)
-	if err != nil {
-		cclog.ComponentError("ClusterManager", err.Error())
+	subClusterId, ok := cm.hostToSubcluster[hostname]
+	if !ok {
+		// This case occurs when no job has been started on this host.
+		// There is probably no harm by just discarding any metrics for this host,
+		// since we can't use them to optimize a job either way.
 		return
 	}
 
