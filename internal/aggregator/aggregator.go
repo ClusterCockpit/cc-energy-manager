@@ -14,11 +14,21 @@ import (
 )
 
 type Aggregator interface {
-	Add(m lp.CCMessage)
-	Get() map[string]float64
+	// Add a metric to this aggregator
+	AggregateMetric(m lp.CCMessage)
+	// Get the current EDP vor all known targets.
+	// The returned map maps all available target names to EDP.
+	// If metrics for certain hosts or devices have not yet been received,
+	// they will not be present in this map. Your code should handle this accordingly
+	GetEdpPerTarget() map[Target]float64
 }
 
-func New(scope string, rawConfig json.RawMessage) Aggregator {
+type Target struct {
+	HostName string
+	DeviceId string
+}
+
+func New(rawConfig json.RawMessage) Aggregator {
 	var err error
 	var ag Aggregator
 
@@ -33,9 +43,9 @@ func New(scope string, rawConfig json.RawMessage) Aggregator {
 
 	switch cfg.Type {
 	case "last":
-		ag, _ = NewLastAggregator(scope, rawConfig)
+		ag, _ = NewLastAggregator(rawConfig)
 	case "median":
-		ag, _ = NewMedianAggregator(scope, rawConfig)
+		ag, _ = NewMedianAggregator(rawConfig)
 	default:
 		cclog.Errorf("Unknown aggregator %s", cfg.Type)
 	}
@@ -67,4 +77,109 @@ func valueToFloat64(value interface{}) (float64, error) {
 		return float64(v), nil
 	}
 	return math.NaN(), fmt.Errorf("cannot convert %v to float64", value)
+}
+
+func JobScopeTarget() Target {
+	return Target{}
+}
+
+func NodeScopeTarget(hostname string) Target {
+	return Target{HostName: hostname}
+}
+
+func DeviceScopeTarget(hostname string, deviceId string) Target {
+	return Target{HostName: hostname, DeviceId: deviceId}
+}
+
+func (t Target) String() string {
+	if t.HostName == "" {
+		return ""
+	}
+	if t.DeviceId != "" {
+		return fmt.Sprintf("%s/%s", t.HostName, t.DeviceId)
+	}
+	return t.HostName
+}
+
+// This function receives a map `map[hostname]map[deviceId]edp` and
+// returns a `map[targetName]edp`.
+// All target scopes are calculated, regardless of the actual scope used.
+// The upper scoppes are calculated by averaging the values. Perhaps we should make
+// this configurable.
+func DeviceEdpToTargetEdp(edpMap map[string]map[string]float64) map[Target]float64 {
+	jobEdp := 0.0
+	jobNumDevices := 0
+
+	targetEdp := make(map[Target]float64)
+
+	for hostname, deviceIdToEdp := range edpMap {
+		hostEdp := 0.0
+		hostNumDevices := 0
+
+		for deviceId, edp := range deviceIdToEdp {
+			hostEdp += edp
+			hostNumDevices++
+
+			targetEdp[DeviceScopeTarget(hostname, deviceId)] = edp
+		}
+
+		jobEdp += hostEdp
+		jobNumDevices += hostNumDevices
+
+		if hostNumDevices > 0 {
+			hostEdp /= float64(hostNumDevices)
+			targetEdp[NodeScopeTarget(hostname)] = hostEdp
+		}
+	}
+
+	if jobNumDevices > 0 {
+		jobEdp /= float64(jobNumDevices)
+		targetEdp[JobScopeTarget()] = jobEdp
+	}
+
+	return targetEdp
+}
+
+func checkAndGetMetricFields(m lp.CCMessage, wantedDeviceType string) (hostname string, deviceId string, value float64, ok bool) {
+	var err error
+
+	// Mind the named return values and the naked return statements!
+	if !m.IsMetric() {
+		cclog.Debugf("Unable to aggregate non-metric message: %+v", m)
+		return 
+	}
+
+	hostname, ok = m.GetTag("hostname")
+	if !ok {
+		cclog.Errorf("Unable to aggregate metric without hostname: %+v", m)
+		return
+	}
+
+	value, err = valueToFloat64(m.GetMetricValue())
+	if err != nil {
+		cclog.Errorf("Unable to parse float (%s) from message: %+v", err, m)
+		ok = false
+		return
+	}
+
+	deviceType, ok := m.GetTag("type")
+	if !ok {
+		cclog.Errorf("Unable to aggregate metric: missing field type: %+v", m)
+		return
+	}
+
+	if deviceType != wantedDeviceType {
+		// this log message can probably be removed, since this case is not unusual
+		//cclog.Debugf("Ignoring metric of non-matching type '%s', wanted '%s'", deviceType, a.deviceType)
+		ok = false
+		return
+	}
+
+	deviceId, ok = m.GetTag("type-id")
+	if !ok {
+		cclog.Errorf("Unable to aggregate metric: missing field type-id: %+v", m)
+		return
+	}
+
+	return
 }

@@ -34,8 +34,8 @@ type JobManager struct {
 	cluster           string
 	resources         []*ccspecs.Resource
 	aggregator        aggregator.Aggregator
-	targetToOptimizer map[string]Optimizer
-	targetToDevices   map[string][]string
+	targetToOptimizer map[aggregator.Target]Optimizer
+	targetToDevices   map[aggregator.Target][]aggregator.Target
 	ticker            time.Ticker
 	started           bool
 	cfg               optimizerConfig
@@ -46,23 +46,6 @@ type Optimizer interface {
 	Start(float64) (int, bool)
 	Update(float64) int
 	IsConverged() bool
-}
-
-/* A `target` string may be:
- * - 'node01/socket/42'                   (device scope)
- * - 'node01/nvidia_gpu/00000000:00:3f.0' (device scope)
- * - 'node01'                             (node scope)
- * - ''                                   (job scope)
- *
- * A `device` string is a `target` string, which must be at target scope. */
-func TargetName(hostname *string, deviceType *string, deviceId *string) string {
-	if hostname == nil {
-		return ""
-	}
-	if deviceType != nil && deviceId != nil {
-		return fmt.Sprintf("%s/%s/%s", *hostname, *deviceType, *deviceId)
-	}
-	return *hostname
 }
 
 func NewJobManager(wg *sync.WaitGroup, cluster string, deviceType string, resources []*ccspecs.Resource,
@@ -81,11 +64,11 @@ func NewJobManager(wg *sync.WaitGroup, cluster string, deviceType string, resour
 		wg:                wg,
 		Done:              make(chan bool),
 		started:           false,
-		targetToOptimizer: make(map[string]Optimizer),
-		targetToDevices:   make(map[string][]string),
+		targetToOptimizer: make(map[aggregator.Target]Optimizer),
+		targetToDevices:   make(map[aggregator.Target][]aggregator.Target),
 		cfg:               cfg,
 		resources:         resources,
-		aggregator:        aggregator.New(cfg.Scope, cfg.AggCfg),
+		aggregator:        aggregator.New(cfg.AggCfg),
 		cluster:           cluster,
 		deviceType:        deviceType,
 	}
@@ -124,21 +107,21 @@ func NewJobManager(wg *sync.WaitGroup, cluster string, deviceType string, resour
 
 func initScopeJob(j *JobManager, resources []*ccspecs.Resource, cfg optimizerConfig, rawCfg json.RawMessage) error {
 	var err error
-	targetName := TargetName(nil, nil, nil)
-	j.targetToOptimizer[targetName], err = NewGssOptimizer(rawCfg)
+	target := aggregator.JobScopeTarget()
+	j.targetToOptimizer[target], err = NewGssOptimizer(rawCfg)
 	if err != nil {
 		return err
 	}
 
-	devices := make([]string, 0)
+	devices := make([]aggregator.Target, 0)
 
 	for _, resource := range resources {
 		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, j.deviceType, resource) {
-			devices = append(devices, TargetName(&resource.Hostname, &j.deviceType, &deviceId))
+			devices = append(devices, aggregator.DeviceScopeTarget(resource.Hostname, deviceId))
 		}
 	}
 
-	j.targetToDevices[targetName] = devices
+	j.targetToDevices[target] = devices
 	return nil
 }
 
@@ -146,19 +129,19 @@ func initScopeNode(j *JobManager, resources []*ccspecs.Resource, cfg optimizerCo
 	var err error
 	for _, resource := range resources {
 		/* Create one optimzer for each host */
-		targetName := TargetName(&resource.Hostname, nil, nil)
-		j.targetToOptimizer[targetName], err = NewGssOptimizer(rawCfg)
+		target := aggregator.NodeScopeTarget(resource.Hostname)
+		j.targetToOptimizer[target], err = NewGssOptimizer(rawCfg)
 		if err != nil {
 			return err
 		}
 
-		devices := make([]string, 0)
+		devices := make([]aggregator.Target, 0)
 
 		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, j.deviceType, resource) {
-			devices = append(devices, TargetName(&resource.Hostname, &j.deviceType, &deviceId))
+			devices = append(devices, aggregator.DeviceScopeTarget(resource.Hostname, deviceId))
 		}
 
-		j.targetToDevices[targetName] = devices
+		j.targetToDevices[target] = devices
 	}
 	return nil
 }
@@ -168,14 +151,14 @@ func initScopeDevice(j *JobManager, resources []*ccspecs.Resource, cfg optimizer
 	for _, resource := range resources {
 		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, j.deviceType, resource) {
 			/* Create one optimizer for each device on a host to optimize. */
-			targetName := TargetName(&resource.Hostname, &j.deviceType, &deviceId)
-			j.targetToOptimizer[targetName], err = NewGssOptimizer(rawCfg)
+			target := aggregator.DeviceScopeTarget(resource.Hostname, deviceId)
+			j.targetToOptimizer[target], err = NewGssOptimizer(rawCfg)
 			if err != nil {
 				return err
 			}
-			/* In "device" scope, `target` and `device` strings are indentical */
-			deviceName := targetName
-			j.targetToDevices[targetName] = []string{deviceName}
+			/* In "device" scope, `target` and `device` are indentical */
+			device := target
+			j.targetToDevices[target] = []aggregator.Target{device}
 		}
 	}
 	return nil
@@ -222,25 +205,37 @@ func (j *JobManager) Start() {
 				close(done)
 				return
 			case inputVal := <-j.Input:
-				j.aggregator.Add(inputVal)
+				j.aggregator.AggregateMetric(inputVal)
 			case <-j.ticker.C:
-				/* TODO the current spec of the aggregator must be fixed to accomodate our changes.
-				 * At the moment the LastAggregator only returns a host as key in the map, which is pretty useless.
-				 * We need it to return a target name. See above for details. */
-				aggregatedMetrics := j.aggregator.Get()
+				edpPerTarget := j.aggregator.GetEdpPerTarget()
 
-				for !warmUpDone {
-					for targetName, optimizer := range j.targetToOptimizer {
-						_, warmUpDone = optimizer.Start(aggregatedMetrics[targetName])
+				if !warmUpDone {
+					warmUpDone = true
+					for target, optimizer := range j.targetToOptimizer {
+						edp, ok := edpPerTarget[target]
+						if !ok {
+							// initially 
+							warmUpDone = false
+							continue
+						}
+
+						if _, warmUpDoneNew := optimizer.Start(edp); !warmUpDoneNew {
+							// If just a single optimizer is not warmed up, don't go over to normal operation.
+							warmUpDone = false
+						}
+					}
+
+					if !warmUpDone {
+						// Wait until the next tick to run the warmup again
+						break
 					}
 				}
 
 				for target, optimizer := range j.targetToOptimizer {
-					optimum := fmt.Sprintf("%d", optimizer.Update(aggregatedMetrics[target]))
+					optimum := fmt.Sprintf("%d", optimizer.Update(edpPerTarget[target]))
 
 					for _, device := range j.targetToDevices[target] {
-						/* `device` is a full string like: "node01/nvidia_gpu/00000000:1f.2.0" */
-						controller.Instance.Set(j.cluster, device, j.cfg.ControlName, optimum)
+						controller.Instance.Set(j.cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimum)
 					}
 				}
 			}

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,7 +19,7 @@ import (
 var Instance Controller
 
 type Controller interface {
-	Set(cluster string, deviceString string, control string, value string) error
+	Set(cluster string, hostname string, deviceType string, deviceId string, control string, value string) error
 	GetDeviceIdsForResources(cluster string, deviceType string, resource *ccspecs.Resource) []string
 	Cleanup()
 }
@@ -66,18 +65,7 @@ func NewCcController(rawConfig json.RawMessage) (*ccController, error) {
 	return c, nil
 }
 
-func (c *ccController) Set(cluster string, deviceString string, control string, value string) error {
-	/* e.g. "node01/gpu/00000000:00:3c.0" --> "node01", "gpu", "00000000:00:3c.0" */
-	deviceStringComponents := strings.Split(deviceString, "/")
-	if len(deviceStringComponents) != 3 {
-		// This case should not occur if we pass parameters with the right format
-		cclog.Fatalf("Invalid argument: Cannot decompose device string: '%s'", deviceString)
-	}
-
-	hostname := deviceStringComponents[0]
-	deviceType := deviceStringComponents[1]
-	deviceId := deviceStringComponents[2]
-
+func (c *ccController) Set(cluster string, hostname string, deviceType string, deviceId string, control string, value string) error {
 	controlClient, err := getControlClient(c, cluster)
 	if err != nil {
 		cclog.Errorf("getControlClient() failed: %v", err)

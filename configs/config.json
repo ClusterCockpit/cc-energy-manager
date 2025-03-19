@@ -21,9 +21,10 @@
         "socket" : {
           "scope": "node",
           "aggregator": {
-          "type": "last",
+            "type": "last",
             "energy": "cpu_energy",
-            "instructions": "instructions"
+            "instructions": "instructions",
+            "deviceType": "socket"
           },
           "controlName": "rapl.pkg_power_limit1",
           "intervalConverged": "10m",
@@ -45,7 +46,8 @@
           "aggregator": {
             "type": "last",
             "energy": "acc_power",
-            "instructions": "kernels"
+            "instructions": "kernels",
+            "deviceType": "nvidia_gpu"
           },
           "controlName": "nvml.power_limit",
           "intervalConverged": "5m",
@@ -63,7 +65,8 @@
           "aggregator": {
             "type": "lastJob",
             "energy": "cpu_energy",
-            "instructions": "instructions"
+            "instructions": "instructions",
+            "deviceType": "nvidia_gpu"
           },
           "controlName": "rapl.pkg_power_limit1",
           "intervalConverged": "5m",

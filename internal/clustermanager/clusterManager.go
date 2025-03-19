@@ -242,6 +242,11 @@ func (cm *clusterManager) getSubcluster(hostname string) (SubClusterId, error) {
 func (cm *clusterManager) processMetric(msg lp.CCMessage) {
 	// Forward this metric to all JobManagers running on nodes,
 	// that are currently associated with the message's hostname.
+	if !msg.IsMetric() {
+		cclog.ComponentError("ClusterManager", "Incoming message is not a metric: %+v", msg)
+		return
+	}
+
 	hostname, ok := msg.GetTag("hostname")
 	if !ok {
 		cclog.ComponentError("ClusterManager", "Incoming message is missing tag 'hostname': %+v", msg)
@@ -265,9 +270,12 @@ func (cm *clusterManager) processMetric(msg lp.CCMessage) {
 		cclog.ComponentError("ClusterManager", "Received metric with inconsistent hostname <-> cluster mapping")
 	}
 
+	// search for the right job managers to send our metric to
 	for _, jobMgrId := range cm.subClusters[subClusterId].hostToJobMgrIds[hostname] {
 		if jobManager, ok := cm.subClusters[subClusterId].jobManagers[jobMgrId]; ok {
 			jobManager.Input <- msg
+		} else {
+			cclog.Fatalf("I don't think this should occur. If so it means that we did not create a job manager")
 		}
 	}
 }

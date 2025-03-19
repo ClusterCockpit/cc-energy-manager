@@ -14,18 +14,23 @@ import (
 )
 
 type MedianAggregatorConfig struct {
-	Energy       string `json:"energy"`
-	Instructions string `json:"instructions"`
+	DeviceType        string `json:"deviceType"`
+	PowerMetric       string `json:"powerMetric"`
+	PerformanceMetric string `json:"performanceMetric"`
+	WindowSize        int    `json:"windowSize"`
 }
 
 type MedianAggregator struct {
-	energy       map[string][]float64
-	instructions map[string][]float64
-	metrics      map[string]string
-	scope        string
+	// map[hostname]map[deviceId][]sample
+	powerSamples       map[string]map[string][]float64
+	performanceSamples map[string]map[string][]float64
+	powerMetric        string
+	performanceMetric  string
+	deviceType         string
+	windowSize         int
 }
 
-func NewMedianAggregator(scope string, rawConfig json.RawMessage) (*MedianAggregator, error) {
+func NewMedianAggregator(rawConfig json.RawMessage) (*MedianAggregator, error) {
 	ag := &MedianAggregator{}
 	var config MedianAggregatorConfig
 
@@ -33,64 +38,105 @@ func NewMedianAggregator(scope string, rawConfig json.RawMessage) (*MedianAggreg
 		cclog.Warnf("Init() > Unmarshal error: %#v", err)
 		return nil, err
 	}
-	if config.Energy == "" || config.Instructions == "" {
+
+	if config.PowerMetric == "" || config.PerformanceMetric == "" || config.DeviceType == "" {
 		err := fmt.Errorf("Init() : empty metric configuration")
 		cclog.Errorf("Init() > config.Path error: %v", err)
 		return nil, err
 	}
-	ag.metrics = make(map[string]string)
-	ag.metrics["energy"] = config.Energy
-	ag.metrics["instructions"] = config.Instructions
-	ag.energy = make(map[string][]float64)
-	ag.instructions = make(map[string][]float64)
-	ag.scope = scope
+
+	if config.WindowSize <= 0 {
+		cclog.Errorf("MedianAggregator: Window size must be >= 1: Adjusting to 1")
+		config.WindowSize = 1
+	}
+
+	ag.powerMetric = config.PowerMetric
+	ag.performanceMetric = config.PerformanceMetric
+	ag.powerSamples = make(map[string]map[string][]float64)
+	ag.performanceSamples = make(map[string]map[string][]float64)
+	ag.deviceType = config.DeviceType
+	ag.windowSize = config.WindowSize
 
 	return ag, nil
 }
 
-func (a *MedianAggregator) Add(m lp.CCMessage) {
-	if !m.IsMetric() {
+func (a *MedianAggregator) AggregateMetric(m lp.CCMessage) {
+	hostname, deviceId, value, ok := checkAndGetMetricFields(m, a.deviceType)
+	if !ok {
 		return
 	}
-	metric := m.Name()
-	if h, ok := m.GetTag("hostname"); ok {
-		switch metric {
-		case a.metrics["energy"]:
-			value, _ := valueToFloat64(m.GetMetricValue())
-			a.energy[h] = append(a.energy[h], value)
-		case a.metrics["instructions"]:
-			value, _ := valueToFloat64(m.GetMetricValue())
-			a.instructions[h] = append(a.instructions[h], value)
+
+	if m.Name() == a.powerMetric {
+		// create host specific map if it does not exist yet
+		deviceIdToPowerSamples, ok := a.powerSamples[hostname]
+		if !ok {
+			deviceIdToPowerSamples = make(map[string][]float64)
+			a.powerSamples[hostname] = deviceIdToPowerSamples
+		}
+
+		// create device specific window
+		if _, ok := deviceIdToPowerSamples[deviceId]; !ok {
+			deviceIdToPowerSamples[deviceId] = make([]float64, 0)
+		}
+
+		// insert measurement into history, discard old values if window is to big
+		l := len(deviceIdToPowerSamples[deviceId])
+		if l >= a.windowSize {
+			deviceIdToPowerSamples[deviceId] = append(deviceIdToPowerSamples[deviceId][:l-1], value)
+		} else {
+			deviceIdToPowerSamples[deviceId] = append(deviceIdToPowerSamples[deviceId], value)
+		}
+	} else if m.Name() == a.performanceMetric {
+		// create host specific map if it does not exist yet
+		deviceIdToPerformanceSamples, ok := a.performanceSamples[hostname]
+		if !ok {
+			deviceIdToPerformanceSamples = make(map[string][]float64)
+			a.performanceSamples[hostname] = deviceIdToPerformanceSamples
+		}
+
+		// create device specific window
+		if _, ok := deviceIdToPerformanceSamples[deviceId]; !ok {
+			deviceIdToPerformanceSamples[deviceId] = make([]float64, 0)
+		}
+
+		// insert measurement into history, discard old values if window is to big
+		l := len(deviceIdToPerformanceSamples[deviceId])
+		if l >= a.windowSize {
+			deviceIdToPerformanceSamples[deviceId] = append(deviceIdToPerformanceSamples[deviceId][:l-1], value)
+		} else {
+			deviceIdToPerformanceSamples[deviceId] = append(deviceIdToPerformanceSamples[deviceId], value)
 		}
 	}
 }
 
-func (a *MedianAggregator) Get() map[string]float64 {
-	edp := make(map[string]float64)
-	max := 0.0
-	maxHost := ""
+func (a *MedianAggregator) GetEdpPerTarget() map[Target]float64 {
+	// calculate energy delay product (EDP) per host and per device
+	edp := make(map[string]map[string]float64)
 
-	for h, energy := range a.energy {
-		if instructions, ok := a.instructions[h]; ok {
-			energy, err := util.Median(energy)
-			if err != nil {
-				cclog.Errorf("medianAggregator > error: %v", err)
-			}
-			instructions, err := util.Median(instructions)
-			if err != nil {
-				cclog.Errorf("medianAggregator > error: %v", err)
-			}
-			edp[h] = energy / instructions
-			if instructions > max {
-				max = instructions
-				maxHost = h
-			}
-			a.instructions[h] = nil
+	for hostname, deviceIdToPowerSamples := range a.powerSamples {
+		deviceIdToPerformanceSamples, ok := a.performanceSamples[hostname]
+		if !ok {
+			// Initially it may happen that we haven't received a performance sample yet.
+			// Ignore, since it will hopefully arrive until the next iteration.
+			continue
 		}
-		a.energy[h] = nil
+
+		edp[hostname] = make(map[string]float64)
+
+		for deviceId, powerSampleWindow := range deviceIdToPowerSamples {
+			performanceSampleWindow, ok := deviceIdToPerformanceSamples[deviceId]
+			if !ok {
+				// same here
+				continue
+			}
+
+			// When the window is created, it is always filled with the first value,
+			// thus the window is never empty and Median won't fail.
+			powerMedian, _ := util.Median(powerSampleWindow)
+			performanceMedian, _ := util.Median(performanceSampleWindow)
+			edp[hostname][deviceId] = powerMedian / performanceMedian
+		}
 	}
 
-	edp["job"] = edp[maxHost]
-
-	return edp
+	return DeviceEdpToTargetEdp(edp)
 }
