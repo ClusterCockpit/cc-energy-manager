@@ -92,7 +92,7 @@ func mainFunc() int {
 		return 1
 	}
 
-	if cfg := cfg.GetPackageConfig("optimizer"); cfg != nil {
+	if cfg := cfg.GetPackageConfig("clusters"); cfg != nil {
 		ClustManager, err = cmanager.NewClusterManager(&Sync, cfg)
 		if err != nil {
 			cclog.Error(err.Error())
