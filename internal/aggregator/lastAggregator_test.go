@@ -15,25 +15,12 @@ import (
 
 var ts time.Time
 
-func createMessage(name string, value float64, hostname string) (ccmessage.CCMessage, error) {
-	tags := make(map[string]string)
-	ts = ts.Add(60 * time.Second)
-	tags["hostname"] = hostname
-	tags["type"] = "node"
-	tags["type-id"] = "0"
-	m, err := ccmessage.NewMetric(name, tags, nil, value, ts)
-	if err != nil {
-		return nil, err
-	}
-
-	return m, nil
-}
-
 func TestInit(t *testing.T) {
 	testconfig := `{
         "type": "last",
-        "energy": "cpu_energy",
-        "instructions": "instructions"
+        "powerMetric": "cpu_power",
+        "performanceMetric": "instructions",
+		"deviceType": "socket"
       }`
 
 	cclog.Init("debug", false)
@@ -44,12 +31,13 @@ func TestInit(t *testing.T) {
 	}
 }
 
-func TestAddSingle(t *testing.T) {
+func TestAggregateSingleDevice(t *testing.T) {
 	ts = time.Now()
 	testconfig := `{
         "type": "last",
-        "energy": "cpu_energy",
-        "instructions": "instructions"
+        "powerMetric": "cpu_energy",
+        "performanceMetric": "instructions",
+		"deviceType": "socket"
       }`
 
 	cclog.Init("debug", false)
@@ -59,38 +47,56 @@ func TestAddSingle(t *testing.T) {
 		return
 	}
 
-	var energy, instructions float64
+	power := 100.0
+	instructions := 10.0
 
 	for i := 0; i < 10; i++ {
-		energy = 100.0 + float64(i)
-		m, err := createMessage("cpu_energy", energy, "m1203")
+		power += 2.45
+		instructions += 1
+
+		tags := map[string]string{"hostname": "m1203", "type": "socket", "type-id": "0"}
+		m, err := ccmessage.NewMetric("cpu_energy", tags, nil, power, ts)
 		if err != nil {
 			t.Errorf("failed to create message: %v", err.Error())
 			return
 		}
-		ag.Add(m)
-		instructions = 10.0 * float64(i)
-		m, err = createMessage("instructions", instructions, "m1203")
+
+		ag.AggregateMetric(m)
+
+		m, err = ccmessage.NewMetric("instructions", tags, nil, instructions, ts)
 		if err != nil {
 			t.Errorf("failed to create message: %v", err.Error())
 			return
 		}
-		ag.Add(m)
+
+		ag.AggregateMetric(m)
 	}
 
-	in := ag.Get()
+	edp := ag.GetEdpPerTarget()
 
-	if in["m1203"] != energy/instructions {
-		t.Errorf("expected %f, got %f", energy/instructions, in["m1203"])
+	target := Target{HostName: "m1203", DeviceId: "0"}
+	if edp[target] != power/instructions {
+		t.Errorf("expected %f, got %f", power/instructions, edp[target])
+	}
+
+	target = Target{HostName: "m1203"}
+	if edp[target] != power/instructions {
+		t.Errorf("expected %f, got %f", power/instructions, edp[target])
+	}
+
+	target = Target{}
+	if edp[target] != power/instructions {
+		t.Errorf("expected %f, got %f", power/instructions, edp[target])
 	}
 }
 
-func TestAddMultiple(t *testing.T) {
+func TestAggregateMultipleHosts(t *testing.T) {
 	ts = time.Now()
 	testconfig := `{
         "type": "last",
-        "energy": "cpu_energy",
-        "instructions": "instructions"
+        "powerMetric": "cpu_energy",
+        "performanceMetric": "instructions",
+		"deviceType": "socket"
       }`
 
 	cclog.Init("debug", false)
@@ -100,35 +106,45 @@ func TestAddMultiple(t *testing.T) {
 		return
 	}
 
-	var energy, instructions [4]float64
+	power := [4]float64{124.3, 252.1, 133.0, 122.1}
+	instructions := [4]float64{24.3, 52.1, 33.0, 22.1}
 	hosts := [4]string{"m1203", "m1204", "m1205", "m1206"}
 
 	for i := 0; i < 10; i++ {
-		for r, host := range hosts {
-			energy[r] = 100.0 + float64(r)*2 + float64(i)
-			m, err := createMessage("cpu_energy", energy[r], host)
+		for hostIdx, host := range hosts {
+			power[hostIdx] += 2.45
+			instructions[hostIdx] += 1
+
+			tags := map[string]string{"hostname": host, "type": "socket", "type-id": "0"}
+			m, err := ccmessage.NewMetric("cpu_energy", tags, nil, power[hostIdx], ts)
 			if err != nil {
 				t.Errorf("failed to create message: %v", err.Error())
 				return
 			}
-			ag.Add(m)
-			instructions[r] = 10.0 * float64(r) * 3.0 * float64(i)
-			m, err = createMessage("instructions", instructions[r], host)
+
+			ag.AggregateMetric(m)
+
+			m, err = ccmessage.NewMetric("instructions", tags, nil, instructions[hostIdx], ts)
 			if err != nil {
 				t.Errorf("failed to create message: %v", err.Error())
 				return
 			}
-			ag.Add(m)
+
+			ag.AggregateMetric(m)
 		}
 	}
 
-	in := ag.Get()
+	edp := ag.GetEdpPerTarget()
 
-	if in["m1205"] != energy[2]/instructions[2] {
-		t.Errorf("expected %f, got %f", energy[2]/instructions[2], in["m1205"])
-	}
+	for i, host := range hosts {
+		target := Target{HostName: host, DeviceId: "0"}
+		if edp[target] != power[i]/instructions[i] {
+			t.Errorf("expected %f, got %f", power[i]/instructions[i], edp[target])
+		}
 
-	if in["job"] != in["m1206"] {
-		t.Errorf("expected %f, got %f", in["m1206"], in["job"])
+		target = Target{HostName: host}
+		if edp[target] != power[i]/instructions[i] {
+			t.Errorf("expected %f, got %f", power[i]/instructions[i], edp[target])
+		}
 	}
 }

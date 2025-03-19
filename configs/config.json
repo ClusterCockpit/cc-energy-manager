@@ -22,8 +22,8 @@
           "scope": "node",
           "aggregator": {
             "type": "last",
-            "energy": "cpu_energy",
-            "instructions": "instructions",
+            "powerMetric": "cpu_energy",
+            "performanceMetric": "instructions",
             "deviceType": "socket"
           },
           "controlName": "rapl.pkg_power_limit1",
@@ -45,8 +45,8 @@
           "scope": "device",
           "aggregator": {
             "type": "last",
-            "energy": "acc_power",
-            "instructions": "kernels",
+            "powerMetric": "acc_power",
+            "performanceMetric": "kernels",
             "deviceType": "nvidia_gpu"
           },
           "controlName": "nvml.power_limit",
@@ -63,10 +63,11 @@
           "subcluster": "a100",
           "scope": "job",
           "aggregator": {
-            "type": "lastJob",
-            "energy": "cpu_energy",
-            "instructions": "instructions",
-            "deviceType": "nvidia_gpu"
+            "type": "median",
+            "powerMetric": "cpu_energy",
+            "performanceMetric": "instructions",
+            "deviceType": "nvidia_gpu",
+            "windowSize": 5
           },
           "controlName": "rapl.pkg_power_limit1",
           "intervalConverged": "5m",
