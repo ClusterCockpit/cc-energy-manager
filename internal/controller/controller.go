@@ -184,6 +184,7 @@ func (c *ccController) getTopoForHost(cluster string, hostname string) (*cccontr
 
 	ccControlClient, err := getControlClient(c, cluster)
 	if err != nil {
+		cclog.Errorf("getControlClient() failed: %v", err)
 		return nil, err
 	}
 
