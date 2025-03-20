@@ -102,6 +102,8 @@ func NewJobManager(wg *sync.WaitGroup, cluster string, deviceType string, resour
 		return nil, err
 	}
 
+	cclog.Debugf("Created new job (cluster=%s deviceType=%s)", cluster, deviceType)
+
 	return &j, nil
 }
 
@@ -195,6 +197,8 @@ func (j *JobManager) Start() {
 	// Ticker for running the optimizer
 	j.ticker = *time.NewTicker(j.interval)
 	j.started = true
+
+	cclog.Debugf("Starting JobManager")
 
 	go func(done chan bool, wg *sync.WaitGroup) {
 		warmUpDone := false
