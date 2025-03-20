@@ -150,13 +150,13 @@ func (cm *clusterManager) StopJob(meta ccspecs.BaseJob) error {
 func (cm *clusterManager) registerJob(subClusterId SubClusterId, jobManagerId JobManagerId, resources []*ccspecs.Resource) {
 	subCluster, ok := cm.subClusters[subClusterId]
 	if ok {
-		cclog.Errorf("Cannot register job for subCluster %s, which is not available.", subClusterId.SubCluster)
+		cclog.Errorf("Cannot register job for subCluster '%s', which is not available.", subClusterId.SubCluster)
 		return
 	}
 
 	jobManagerConfig, ok := subCluster.deviceTypeToOptimizerConfig[jobManagerId.DeviceType]
 	if !ok {
-		cclog.Debugf("Not starting optimzier for deviceType %s, which has no optimizer configured", jobManagerId.DeviceType)
+		cclog.Debugf("Not starting optimzier for deviceType '%s', which has no optimizer configured", jobManagerId.DeviceType)
 		return
 	}
 
