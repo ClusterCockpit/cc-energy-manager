@@ -276,6 +276,7 @@ func (cm *clusterManager) processMetric(msg lp.CCMessage) {
 }
 
 func (cm *clusterManager) processEvent(msg lp.CCMessage) {
+	cclog.Debug("ClusterManager: processEvent()")
 	if msg.Name() != "job" {
 		cclog.Debugf("Ignoring incoming non-job event: %+v", msg)
 		return
