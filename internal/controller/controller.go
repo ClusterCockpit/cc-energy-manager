@@ -59,8 +59,11 @@ func NewCcController(rawConfig json.RawMessage) (*ccController, error) {
 		return nil, err
 	}
 
-	c.nats = cfg.Nats
+	c.controlClients = make(map[string]cccontrol.CCControlClient)
+	c.toposLastClear = time.Now()
 	c.toposMaxAge = time.Duration(cfg.ToposMaxAge) * time.Second
+	c.topos = make(map[string]cccontrol.CCControlTopology)
+	c.nats = cfg.Nats
 
 	return c, nil
 }
