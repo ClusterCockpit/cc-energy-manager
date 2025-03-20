@@ -152,7 +152,7 @@ func (cm *clusterManager) StopJob(meta ccspecs.BaseJob) error {
 
 func (cm *clusterManager) registerJob(subClusterId SubClusterId, jobManagerId JobManagerId, resources []*ccspecs.Resource) {
 	subCluster, ok := cm.subClusters[subClusterId]
-	if ok {
+	if !ok {
 		cclog.Errorf("Cannot register job for cluster '%s', which is not available.", subClusterId)
 		return
 	}
