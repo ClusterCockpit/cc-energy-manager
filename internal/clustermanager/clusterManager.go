@@ -51,11 +51,11 @@ type ClusterManager interface {
 }
 
 func (jmid JobManagerId) String() string {
-	return fmt.Sprintf("%d-%s", jmid.JobId, jmid.DeviceType)
+	return fmt.Sprintf("%d/%s", jmid.JobId, jmid.DeviceType)
 }
 
 func (scid SubClusterId) String() string {
-	return fmt.Sprintf("%s-%s", scid.Cluster, scid.SubCluster)
+	return fmt.Sprintf("%s/%s", scid.Cluster, scid.SubCluster)
 }
 
 func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
@@ -64,6 +64,7 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 		SubCluster     *string                    `json:"subcluster"`
 		DeviceTypes    map[string]json.RawMessage `json:"devicetypes"`
 	}{}
+
 	err := json.Unmarshal(rawClusterConfig, &clusterConfig)
 	if err != nil {
 		return fmt.Errorf("Unable to parse cluster JSON: %w", err)
@@ -77,6 +78,8 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 		Cluster:    *clusterConfig.Cluster,
 		SubCluster: *clusterConfig.SubCluster,
 	}
+
+	cclog.Debugf("Adding Cluster '%s'", subClusterId)
 
 	if _, ok := cm.subClusters[subClusterId]; ok {
 		return fmt.Errorf("Cluster defined twice in config file: '%+v'", subClusterId)
@@ -150,7 +153,7 @@ func (cm *clusterManager) StopJob(meta ccspecs.BaseJob) error {
 func (cm *clusterManager) registerJob(subClusterId SubClusterId, jobManagerId JobManagerId, resources []*ccspecs.Resource) {
 	subCluster, ok := cm.subClusters[subClusterId]
 	if ok {
-		cclog.Errorf("Cannot register job for subCluster '%s', which is not available.", subClusterId.SubCluster)
+		cclog.Errorf("Cannot register job for cluster '%s', which is not available.", subClusterId)
 		return
 	}
 
