@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"strings"
 	"time"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
@@ -97,10 +98,17 @@ func getControlClient(c *ccController, cluster string) (cccontrol.CCControlClien
 		/* If we don't have a CCControlClient for the required cluster in our map, create a new one */
 		cclog.Debugf("No CCControlClient found for cluster %s. Creating new one", cluster)
 
-		// FIXME make the NATS subject properly configurable:
-		// Currently is is fixed to the cluster name.
-		c.nats.OutputSubject = cluster
-		controlClient, err := cccontrol.NewCCControlClient(c.nats)
+		// TODO Currently, only the request subject is configurable.
+		// The reply subject is currenly fixed as '_INBOX.XXXXXXXXXXX'.
+		// To change this, adjustments to cc-node-controller are necessary:
+		// https://github.com/ClusterCockpit/cc-node-controller/issues/1
+
+		// Apply the clustername to the configured request subject.
+		// '%c' is replace with the cluster name that is being controlled:
+		// 'mysubject_%c_foobar' --> 'myclustername_mycluster_foobar'
+		newNatsConfig := c.nats
+		newNatsConfig.OutputSubject = strings.ReplaceAll(c.nats.OutputSubject, "%c", cluster)
+		controlClient, err := cccontrol.NewCCControlClient(newNatsConfig)
 		if err != nil {
 			return nil, fmt.Errorf("NewCCControlClient failed: %w", err)
 		}
