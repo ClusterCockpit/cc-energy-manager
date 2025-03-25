@@ -192,6 +192,7 @@ func (c *ccController) getTopoForHost(cluster string, hostname string) (*cccontr
 	defer c.toposMutex.Unlock()
 
 	if _, ok := c.topos[hostname]; !ok {
+		cclog.Debugf("Getting topology for host: '%s'", hostname)
 		topo, err := ccControlClient.GetTopology(hostname)
 		if err != nil {
 			return nil, fmt.Errorf("GetTopology() failed: %w", err)
