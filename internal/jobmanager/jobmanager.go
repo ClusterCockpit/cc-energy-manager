@@ -27,8 +27,8 @@ type optimizerConfig struct {
 }
 
 type JobManager struct {
-	wg                *sync.WaitGroup
-	Done              chan bool
+	wg                sync.WaitGroup
+	done              chan struct{}
 	Input             chan lp.CCMessage
 	interval          time.Duration
 	cluster           string
@@ -36,7 +36,7 @@ type JobManager struct {
 	aggregator        aggregator.Aggregator
 	targetToOptimizer map[aggregator.Target]Optimizer
 	targetToDevices   map[aggregator.Target][]aggregator.Target
-	ticker            time.Ticker
+	optimizeTicker            time.Ticker
 	started           bool
 	cfg               optimizerConfig
 	deviceType        string
@@ -48,7 +48,7 @@ type Optimizer interface {
 	IsConverged() bool
 }
 
-func NewJobManager(wg *sync.WaitGroup, cluster string, deviceType string, resources []*ccspecs.Resource,
+func NewJobManager(cluster string, deviceType string, resources []*ccspecs.Resource,
 	config json.RawMessage,
 ) (*JobManager, error) {
 	var cfg optimizerConfig
@@ -61,8 +61,7 @@ func NewJobManager(wg *sync.WaitGroup, cluster string, deviceType string, resour
 	}
 
 	j := JobManager{
-		wg:                wg,
-		Done:              make(chan bool),
+		done:              make(chan struct{}),
 		started:           false,
 		targetToOptimizer: make(map[aggregator.Target]Optimizer),
 		targetToDevices:   make(map[aggregator.Target][]aggregator.Target),
@@ -178,42 +177,41 @@ func (j *JobManager) AddInput(input chan lp.CCMessage) {
 	j.Input = input
 }
 
-// TODO: Fix correct shutdown
 func (r *JobManager) Close() {
-	if r.started {
-		cclog.ComponentDebug("JobManager", "Sending Done")
-		r.Done <- true
-		<-r.Done
-		cclog.ComponentDebug("JobManager", "STOPPING Timer")
-		// os.ticker.Stop()
+	if !r.started {
+		cclog.ComponentDebug("JobManager", "Not started, thus not closing")
+		return
 	}
-	cclog.ComponentDebug("JobManager", "Waiting for optimizer to exit")
-	r.wg.Done()
-	cclog.ComponentDebug("JobManager", "CLOSE")
+
+	cclog.ComponentDebug("JobManager", "Stopping JobManager...")
+	r.done <- struct{}{}
+	r.wg.Wait()
+	cclog.ComponentDebug("JobManager", "Stopped JobManager!")
 }
 
 func (j *JobManager) Start() {
 	j.wg.Add(1)
-	// Ticker for running the optimizer
-	j.ticker = *time.NewTicker(j.interval)
+
+	j.optimizeTicker = *time.NewTicker(j.interval)
 	j.started = true
 
-	cclog.Debugf("Starting JobManager")
+	cclog.ComponentDebug("JobManager", "Starting")
 
-	go func(done chan bool, wg *sync.WaitGroup) {
+	go func() {
 		warmUpDone := false
 		for {
 			select {
-			case <-done:
-				wg.Done()
-				close(done)
+			case <-j.done:
+				j.optimizeTicker.Stop()
+				j.wg.Done()
 				return
 			case inputVal := <-j.Input:
 				j.aggregator.AggregateMetric(inputVal)
-			case <-j.ticker.C:
+			case <-j.optimizeTicker.C:
 				edpPerTarget := j.aggregator.GetEdpPerTarget()
 
 				if !warmUpDone {
+					cclog.ComponentDebug("JobManager", "Warming up...")
 					warmUpDone = true
 					for target, optimizer := range j.targetToOptimizer {
 						edp, ok := edpPerTarget[target]
@@ -233,6 +231,8 @@ func (j *JobManager) Start() {
 						// Wait until the next tick to run the warmup again
 						break
 					}
+
+					cclog.ComponentDebug("JobManager", "Warmup done!")
 				}
 
 				for target, optimizer := range j.targetToOptimizer {
@@ -244,5 +244,5 @@ func (j *JobManager) Start() {
 				}
 			}
 		}
-	}(j.Done, j.wg)
+	}()
 }

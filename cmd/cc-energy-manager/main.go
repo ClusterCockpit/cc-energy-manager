@@ -24,8 +24,7 @@ var (
 	SinkManager                            sinks.SinkManager
 	ReceiveManager                         receivers.ReceiveManager
 	ClustManager                           cmanager.ClusterManager
-	Channels                               []chan lp.CCMessage
-	Sync                                   sync.WaitGroup
+	ShutdownWG                                   sync.WaitGroup
 	flagOnce, flagVersion, flagLogDateTime bool
 	flagConfigFile, flagLogLevel           string
 )
@@ -40,14 +39,14 @@ func ReadCli() {
 
 // General shutdownHandler function that gets executed in case of interrupt or graceful shutdownHandler
 func shutdownHandler(shutdownSignal chan os.Signal) {
-	defer Sync.Done()
-
+	// Wait until we receive a UNIX Signal
 	<-shutdownSignal
-	// Remove shutdown handler
-	// every additional interrupt signal will stop without cleaning up
+
+	// Disable handling of further signals. All following signals will unconditionally
+	// terminate us. This may be useful if something should go wrong during shutdown handling.
 	signal.Stop(shutdownSignal)
 
-	cclog.Info("Shutdown...")
+	cclog.Info("Shutting down components...")
 
 	if ReceiveManager != nil {
 		cclog.Debug("Shutdown ReceiveManager...")
@@ -61,6 +60,8 @@ func shutdownHandler(shutdownSignal chan os.Signal) {
 		cclog.Debug("Shutdown ClusterManager...")
 		ClustManager.Close()
 	}
+
+	ShutdownWG.Done()
 }
 
 func mainFunc() int {
@@ -71,7 +72,7 @@ func mainFunc() int {
 	cfg.Init(flagConfigFile)
 
 	if cfg := cfg.GetPackageConfig("sinks"); cfg != nil {
-		SinkManager, err = sinks.New(&Sync, cfg)
+		SinkManager, err = sinks.New(&ShutdownWG, cfg)
 		if err != nil {
 			cclog.Error(err.Error())
 			return 1
@@ -82,7 +83,7 @@ func mainFunc() int {
 	}
 
 	if cfg := cfg.GetPackageConfig("receivers"); cfg != nil {
-		ReceiveManager, err = receivers.New(&Sync, cfg)
+		ReceiveManager, err = receivers.New(&ShutdownWG, cfg)
 		if err != nil {
 			cclog.Error(err.Error())
 			return 1
@@ -93,7 +94,7 @@ func mainFunc() int {
 	}
 
 	if cfg := cfg.GetPackageConfig("clusters"); cfg != nil {
-		ClustManager, err = cmanager.NewClusterManager(&Sync, cfg)
+		ClustManager, err = cmanager.NewClusterManager(cfg)
 		if err != nil {
 			cclog.Error(err.Error())
 			return 1
@@ -113,13 +114,13 @@ func mainFunc() int {
 		cclog.Error("Controller configuration must be present")
 		return 1
 	}
-	defer controller.Instance.Cleanup()
+	defer controller.Instance.Close()
 
 	// Create shutdown handler
 	shutdownSignal := make(chan os.Signal, 1)
 	signal.Notify(shutdownSignal, os.Interrupt)
 	signal.Notify(shutdownSignal, syscall.SIGTERM)
-	Sync.Add(1)
+	ShutdownWG.Add(1)
 	go shutdownHandler(shutdownSignal)
 
 	ReceiversToClusterManagerChannel := make(chan lp.CCMessage, 200)
@@ -135,7 +136,7 @@ func mainFunc() int {
 	ClustManager.Start()
 
 	// Wait that all goroutines finish
-	Sync.Wait()
+	ShutdownWG.Wait()
 
 	return 0
 }

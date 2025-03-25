@@ -36,8 +36,8 @@ type SubCluster struct {
 
 type clusterManager struct {
 	subClusters       map[SubClusterId]SubCluster
-	done              chan bool
-	wg                *sync.WaitGroup
+	done              chan struct{}
+	wg                sync.WaitGroup
 	input             chan lp.CCMessage
 	output            chan lp.CCMessage
 	hostToSubcluster  map[string]SubClusterId
@@ -163,7 +163,7 @@ func (cm *clusterManager) registerJob(subClusterId SubClusterId, jobManagerId Jo
 		return
 	}
 
-	jm, err := jobmanager.NewJobManager(cm.wg, subClusterId.Cluster, jobManagerId.DeviceType, resources, jobManagerConfig)
+	jm, err := jobmanager.NewJobManager(subClusterId.Cluster, jobManagerId.DeviceType, resources, jobManagerConfig)
 	if err != nil {
 		cclog.Errorf("Unable to create job manager: %v", err)
 		return
@@ -313,13 +313,20 @@ func (cm *clusterManager) processEvent(msg lp.CCMessage) {
 
 func (cm *clusterManager) Start() {
 	cm.wg.Add(1)
+
+	cclog.ComponentDebug("JobManager", "Starting")
+
 	go func() {
 		for {
 			select {
 			case <-cm.done:
+				for _, c := range cm.subClusters {
+					for jobManagerId, jobManager := range c.jobManagers {
+						cclog.ComponentDebug("ClusterManager", "Send close to JobManager", jobManagerId)
+						jobManager.Close()
+					}
+				}
 				cm.wg.Done()
-				close(cm.done)
-				cclog.ComponentDebug("ClusterManager", "DONE")
 				return
 			case m := <-cm.input:
 				mtype := m.MessageType()
@@ -333,31 +340,19 @@ func (cm *clusterManager) Start() {
 			}
 		}
 	}()
-	cclog.ComponentDebug("ClusterManager", "START")
 }
 
 func (cm *clusterManager) Close() {
-	// Send close signal the cluster manager receive loop
-	cm.done <- true
-	// Iterate over optimizers to and close them
-
-	for _, c := range cm.subClusters {
-		for jobManagerId, jobManager := range c.jobManagers {
-			cclog.ComponentDebug("ClusterManager", "Send close to JobManager", jobManagerId)
-			jobManager.Done <- true
-		}
-	}
-	cclog.ComponentDebug("ClusterManager", "All sessions closed")
-	// Wait until the cluster manager receive loop finished
-	<-cm.done
-	cclog.ComponentDebug("ClusterManager", "CLOSE")
+	cclog.ComponentDebug("ClusterManager", "Stopping ClusterManager...")
+	cm.done <- struct{}{}
+	cm.wg.Wait()
+	cclog.ComponentDebug("ClusterManager", "Stopped ClusterManager!")
 }
 
-func NewClusterManager(wg *sync.WaitGroup, config json.RawMessage) (ClusterManager, error) {
+func NewClusterManager(config json.RawMessage) (ClusterManager, error) {
 	cm := new(clusterManager)
 
-	cm.wg = wg
-	cm.done = make(chan bool)
+	cm.done = make(chan struct{})
 	cm.subClusters = make(map[SubClusterId]SubCluster)
 	cm.hostToSubcluster = make(map[string]SubClusterId)
 

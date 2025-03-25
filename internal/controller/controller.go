@@ -22,7 +22,7 @@ var Instance Controller
 type Controller interface {
 	Set(cluster string, hostname string, deviceType string, deviceId string, control string, value string) error
 	GetDeviceIdsForResources(cluster string, deviceType string, resource *ccspecs.Resource) []string
-	Cleanup()
+	Close()
 }
 
 type ccControllerConfig struct {
@@ -105,7 +105,7 @@ func getControlClient(c *ccController, cluster string) (cccontrol.CCControlClien
 
 		// Apply the clustername to the configured request subject.
 		// '%c' is replace with the cluster name that is being controlled:
-		// 'mysubject_%c_foobar' --> 'myclustername_mycluster_foobar'
+		// 'mysubject_%c_foobar' --> 'mysubject_mycluster_foobar'
 		newNatsConfig := c.nats
 		newNatsConfig.OutputSubject = strings.ReplaceAll(c.nats.OutputSubject, "%c", cluster)
 		controlClient, err := cccontrol.NewCCControlClient(newNatsConfig)
@@ -119,7 +119,7 @@ func getControlClient(c *ccController, cluster string) (cccontrol.CCControlClien
 	return c.controlClients[cluster], nil
 }
 
-func (c *ccController) Cleanup() {
+func (c *ccController) Close() {
 	c.controlClientsMutex.Lock()
 	for _, controlClient := range c.controlClients {
 		controlClient.Close()
