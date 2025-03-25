@@ -6,6 +6,8 @@ github.com/ClusterCockpit/cc-node-controller v0.0.0-20250314153756-39e233a9145e 
 github.com/ClusterCockpit/cc-node-controller v0.0.0-20250314153756-39e233a9145e/go.mod h1:4HSx6fj9mj0DdgmNwU1xquNyOFwHxh5A8mLqCVNlIuI=
 github.com/ClusterCockpit/cc-node-controller v0.0.0-20250325123255-b2732d7b1f02 h1:ROybM7Bq3PEN63pUgEv6Em++F8jPiRN/6GsI4LCz+KI=
 github.com/ClusterCockpit/cc-node-controller v0.0.0-20250325123255-b2732d7b1f02/go.mod h1:4HSx6fj9mj0DdgmNwU1xquNyOFwHxh5A8mLqCVNlIuI=
+github.com/ClusterCockpit/cc-node-controller v0.0.0-20250325151414-8cdc80e50607 h1:3p98H4Ymej8WYUMxvmiIsx0nnJEdQqwCtvCZmymzX/I=
+github.com/ClusterCockpit/cc-node-controller v0.0.0-20250325151414-8cdc80e50607/go.mod h1:4HSx6fj9mj0DdgmNwU1xquNyOFwHxh5A8mLqCVNlIuI=
 github.com/ClusterCockpit/cc-units v0.4.0 h1:zP5DOu99GmErW0tCDf0gcLrlWt42RQ9dpoONEOh4cI0=
 github.com/ClusterCockpit/cc-units v0.4.0/go.mod h1:3S3PAhAayS3pbgcT4q9Vn9VJw22Op51X0YimtG77zBw=
 github.com/RaveNoX/go-jsoncommentstrip v1.0.0/go.mod h1:78ihd09MekBnJnxpICcwzCMzGrKSKYe4AqU6PDYYpjk=

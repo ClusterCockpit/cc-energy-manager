@@ -6,7 +6,7 @@ toolchain go1.24.0
 
 require (
 	github.com/ClusterCockpit/cc-lib v0.1.1
-	github.com/ClusterCockpit/cc-node-controller v0.0.0-20250325123255-b2732d7b1f02
+	github.com/ClusterCockpit/cc-node-controller v0.0.0-20250325151414-8cdc80e50607
 )
 
 require (
