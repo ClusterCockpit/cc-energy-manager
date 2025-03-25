@@ -320,7 +320,9 @@ func (cm *clusterManager) Start() {
 		for {
 			select {
 			case <-cm.done:
+				cclog.ComponentDebug("ClusterManager", "Received Shutdown signal")
 				for _, c := range cm.subClusters {
+					cclog.ComponentDebug("ClusterManager", "Stopping JobManagers on Cluster", c.subClusterId)
 					for jobManagerId, jobManager := range c.jobManagers {
 						cclog.ComponentDebug("ClusterManager", "Send close to JobManager", jobManagerId)
 						jobManager.Close()

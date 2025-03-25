@@ -30,7 +30,8 @@ type JobManager struct {
 	wg                sync.WaitGroup
 	done              chan struct{}
 	Input             chan lp.CCMessage
-	interval          time.Duration
+	intervalSearch    time.Duration
+	intervalConverged time.Duration
 	cluster           string
 	resources         []*ccspecs.Resource
 	aggregator        aggregator.Aggregator
@@ -72,14 +73,21 @@ func NewJobManager(cluster string, deviceType string, resources []*ccspecs.Resou
 		deviceType:        deviceType,
 	}
 
-	t, err := time.ParseDuration(cfg.IntervalSearch)
+	intervalSearch, err := time.ParseDuration(cfg.IntervalSearch)
 	if err != nil {
-		err := fmt.Errorf("failed to parse interval %s: %v", cfg.IntervalSearch, err.Error())
+		err := fmt.Errorf("failed to parse search interval %s: %v", cfg.IntervalSearch, err.Error())
 		cclog.ComponentError("JobManager", err.Error())
 		return nil, err
 	}
+	j.intervalSearch = intervalSearch
 
-	j.interval = t
+	intervalConverged, err := time.ParseDuration(cfg.IntervalConverged)
+	if err != nil {
+		err := fmt.Errorf("failed to parse converged interval %s: %v", cfg.IntervalConverged, err.Error())
+		cclog.ComponentError("JobManager", err.Error())
+		return nil, err
+	}
+	j.intervalConverged = intervalConverged
 
 	/* The functions below initialize j.targetToOptimizer and j.targetToDevices */
 	switch cfg.Scope {
@@ -192,7 +200,9 @@ func (r *JobManager) Close() {
 func (j *JobManager) Start() {
 	j.wg.Add(1)
 
-	j.optimizeTicker = *time.NewTicker(j.interval)
+	// Enable the ticker, which repeadetly notifies us to run the optimizer.
+	// We initially set the interval to something very low, to avoid startup delay.
+	j.optimizeTicker = *time.NewTicker(time.Duration(1) * time.Second)
 	j.started = true
 
 	cclog.ComponentDebug("JobManager", "Starting")
@@ -212,6 +222,7 @@ func (j *JobManager) Start() {
 
 				if !warmUpDone {
 					cclog.ComponentDebug("JobManager", "Warming up...")
+					j.optimizeTicker.Reset(j.intervalSearch)
 					warmUpDone = true
 					for target, optimizer := range j.targetToOptimizer {
 						edp, ok := edpPerTarget[target]
@@ -223,6 +234,7 @@ func (j *JobManager) Start() {
 
 						if _, warmUpDoneNew := optimizer.Start(edp); !warmUpDoneNew {
 							// If just a single optimizer is not warmed up, don't go over to normal operation.
+							cclog.ComponentDebug("JobManager", "Not ready yet...")
 							warmUpDone = false
 						}
 					}
@@ -232,6 +244,7 @@ func (j *JobManager) Start() {
 						break
 					}
 
+					j.optimizeTicker.Reset(j.intervalConverged)
 					cclog.ComponentDebug("JobManager", "Warmup done!")
 				}
 
