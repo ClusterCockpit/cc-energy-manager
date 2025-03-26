@@ -169,9 +169,9 @@ func (cm *clusterManager) registerJob(subClusterId SubClusterId, jobManagerId Jo
 		return
 	}
 
-	jm.AddInput(jm.Input)
-
 	subCluster.jobManagers[jobManagerId] = jm
+	// Which channel size should we choose here?
+	jm.AddInput(make(chan lp.CCMessage, 100000))
 
 	// Populate hostToJobMgrId Mapping
 	for _, r := range resources {
