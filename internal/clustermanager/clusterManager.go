@@ -163,7 +163,7 @@ func (cm *clusterManager) registerJob(subClusterId SubClusterId, jobManagerId Jo
 		return
 	}
 
-	jm, err := jobmanager.NewJobManager(subClusterId.Cluster, jobManagerId.DeviceType, resources, jobManagerConfig)
+	jm, err := jobmanager.NewJobManager(subClusterId.Cluster, subClusterId.SubCluster, jobManagerId.DeviceType, jobManagerId.JobId, resources, jobManagerConfig)
 	if err != nil {
 		cclog.Errorf("Unable to create job manager: %v", err)
 		return

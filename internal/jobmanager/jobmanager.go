@@ -32,7 +32,6 @@ type JobManager struct {
 	Input             chan lp.CCMessage
 	intervalSearch    time.Duration
 	intervalConverged time.Duration
-	cluster           string
 	resources         []*ccspecs.Resource
 	aggregator        aggregator.Aggregator
 	targetToOptimizer map[aggregator.Target]Optimizer
@@ -40,7 +39,10 @@ type JobManager struct {
 	optimizeTicker    *time.Ticker
 	started           bool
 	cfg               optimizerConfig
+	cluster           string
+	subCluster        string // only needed for debugging
 	deviceType        string
+	jobId             int64  // only needed for debugging
 }
 
 type Optimizer interface {
@@ -49,7 +51,7 @@ type Optimizer interface {
 	IsConverged() bool
 }
 
-func NewJobManager(cluster string, deviceType string, resources []*ccspecs.Resource,
+func NewJobManager(cluster, subCluster, deviceType string, jobId int64, resources []*ccspecs.Resource,
 	config json.RawMessage,
 ) (*JobManager, error) {
 	var cfg optimizerConfig
@@ -70,7 +72,9 @@ func NewJobManager(cluster string, deviceType string, resources []*ccspecs.Resou
 		resources:         resources,
 		aggregator:        aggregator.New(cfg.AggCfg),
 		cluster:           cluster,
+		subCluster:        subCluster,
 		deviceType:        deviceType,
+		jobId:             jobId,
 	}
 
 	intervalSearch, err := time.ParseDuration(cfg.IntervalSearch)
@@ -185,16 +189,16 @@ func (j *JobManager) AddInput(input chan lp.CCMessage) {
 	j.Input = input
 }
 
-func (r *JobManager) Close() {
-	if !r.started {
-		cclog.ComponentDebug("JobManager", "Not started, thus not closing")
+func (j *JobManager) Close() {
+	if !j.started {
+		j.Debug("Not started, thus not closing")
 		return
 	}
 
-	cclog.ComponentDebug("JobManager", "Stopping JobManager...")
-	r.done <- struct{}{}
-	r.wg.Wait()
-	cclog.ComponentDebug("JobManager", "Stopped JobManager!")
+	j.Debug("Stopping JobManager...")
+	j.done <- struct{}{}
+	j.wg.Wait()
+	j.Debug("Stopped JobManager!")
 }
 
 func (j *JobManager) Start() {
@@ -205,7 +209,7 @@ func (j *JobManager) Start() {
 	j.optimizeTicker = time.NewTicker(time.Duration(1) * time.Second)
 	j.started = true
 
-	cclog.ComponentDebug("JobManager", "Starting")
+	j.Debug("Starting")
 
 	go func() {
 		warmUpDone := false
@@ -222,7 +226,7 @@ func (j *JobManager) Start() {
 				edpPerTarget := j.aggregator.GetEdpPerTarget()
 
 				if !warmUpDone {
-					cclog.ComponentDebug("JobManager", "Warming up...")
+					j.Debug("Warming up...")
 					j.optimizeTicker.Reset(j.intervalSearch)
 					warmUpDone = true
 					for target, optimizer := range j.targetToOptimizer {
@@ -242,12 +246,12 @@ func (j *JobManager) Start() {
 					if !warmUpDone {
 						// Wait until the next tick to run the warmup again
 						warmUpIterCount++
-						cclog.ComponentDebug("JobManager", "Not ready yet ...", warmUpIterCount)
+						j.Debug("Not ready yet... (iteration=%d)", warmUpIterCount)
 						break
 					}
 
 					j.optimizeTicker.Reset(j.intervalConverged)
-					cclog.ComponentDebug("JobManager", "Warmup done!")
+					j.Debug("Warmup done!")
 				}
 
 				for target, optimizer := range j.targetToOptimizer {
@@ -260,4 +264,10 @@ func (j *JobManager) Start() {
 			}
 		}
 	}()
+}
+
+func (j *JobManager) Debug(fmtstr string, args ...any) {
+	component := fmt.Sprintf("JobManager(%s, %s, %s, %d)", j.cluster, j.subCluster, j.deviceType, j.jobId)
+	msg := fmt.Sprintf(fmtstr, args...)
+	cclog.ComponentDebug(component, msg)
 }
