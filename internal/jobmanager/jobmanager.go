@@ -37,7 +37,7 @@ type JobManager struct {
 	aggregator        aggregator.Aggregator
 	targetToOptimizer map[aggregator.Target]Optimizer
 	targetToDevices   map[aggregator.Target][]aggregator.Target
-	optimizeTicker            time.Ticker
+	optimizeTicker    *time.Ticker
 	started           bool
 	cfg               optimizerConfig
 	deviceType        string
@@ -202,13 +202,14 @@ func (j *JobManager) Start() {
 
 	// Enable the ticker, which repeadetly notifies us to run the optimizer.
 	// We initially set the interval to something very low, to avoid startup delay.
-	j.optimizeTicker = *time.NewTicker(time.Duration(1) * time.Second)
+	j.optimizeTicker = time.NewTicker(time.Duration(1) * time.Second)
 	j.started = true
 
 	cclog.ComponentDebug("JobManager", "Starting")
 
 	go func() {
 		warmUpDone := false
+		warmUpIterCount := 0
 		for {
 			select {
 			case <-j.done:
@@ -234,13 +235,14 @@ func (j *JobManager) Start() {
 
 						if _, warmUpDoneNew := optimizer.Start(edp); !warmUpDoneNew {
 							// If just a single optimizer is not warmed up, don't go over to normal operation.
-							cclog.ComponentDebug("JobManager", "Not ready yet...")
 							warmUpDone = false
 						}
 					}
 
 					if !warmUpDone {
 						// Wait until the next tick to run the warmup again
+						warmUpIterCount++
+						cclog.ComponentDebug("JobManager", "Not ready yet ...", warmUpIterCount)
 						break
 					}
 
