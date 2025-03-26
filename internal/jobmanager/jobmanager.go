@@ -267,7 +267,7 @@ func (j *JobManager) Start() {
 }
 
 func (j *JobManager) Debug(fmtstr string, args ...any) {
-	component := fmt.Sprintf("JobManager(%s, %s, %s, %d)", j.cluster, j.subCluster, j.deviceType, j.jobId)
+	component := fmt.Sprintf("JobManager(%s,%s,%s,%d)", j.cluster, j.subCluster, j.deviceType, j.jobId)
 	msg := fmt.Sprintf(fmtstr, args...)
 	cclog.ComponentDebug(component, msg)
 }
