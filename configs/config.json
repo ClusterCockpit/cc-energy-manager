@@ -17,6 +17,7 @@
     {
       "cluster": "fritz",
       "subcluster": "main",
+      "hostRegexp": "^f\d\d\d\d$",
       "devicetypes" : {
         "socket" : {
           "scope": "node",
@@ -40,6 +41,7 @@
     {
       "cluster": "alex",
       "subcluster": "a100",
+      "hostRegexp": "^a\d\d\d\d$",
       "devicetypes": {
         "nvidia_gpu" : {
           "scope": "device",

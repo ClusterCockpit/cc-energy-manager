@@ -136,10 +136,16 @@ func (c *ccController) GetDeviceIdsForResources(cluster string, deviceType strin
 			cclog.Errorf("Unable to convert hwthreads to sockets: %v", err)
 			return make([]string, 0)
 		}
+		if len(sockets) == 0 {
+			cclog.Warnf("Unable to get sockets for job, which has no sockets")
+		}
 		return sockets
 	case "nvidia_gpu":
-		return resource.Accelerators
+		fallthrough
 	case "amd_gpu":
+		if len(resource.Accelerators) == 0 {
+			cclog.Warnf("Unable to get GPU IDs for job, which has no GPUs")
+		}
 		return resource.Accelerators
 	default:
 		cclog.Fatalf("GetDeviceIdsForResources: Unsupported device '%s'. Please fix the configuration", deviceType)

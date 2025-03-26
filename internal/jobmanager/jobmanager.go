@@ -32,17 +32,14 @@ type JobManager struct {
 	Input             chan lp.CCMessage
 	intervalSearch    time.Duration
 	intervalConverged time.Duration
-	resources         []*ccspecs.Resource
 	aggregator        aggregator.Aggregator
 	targetToOptimizer map[aggregator.Target]Optimizer
 	targetToDevices   map[aggregator.Target][]aggregator.Target
 	optimizeTicker    *time.Ticker
 	started           bool
 	cfg               optimizerConfig
-	cluster           string
-	subCluster        string // only needed for debugging
+	job               ccspecs.BaseJob
 	deviceType        string
-	jobId             int64  // only needed for debugging
 }
 
 type Optimizer interface {
@@ -51,12 +48,10 @@ type Optimizer interface {
 	IsConverged() bool
 }
 
-func NewJobManager(cluster, subCluster, deviceType string, jobId int64, resources []*ccspecs.Resource,
-	config json.RawMessage,
-) (*JobManager, error) {
+func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessage) (*JobManager, error) {
 	var cfg optimizerConfig
 
-	err := json.Unmarshal(config, &cfg)
+	err := json.Unmarshal(rawCfg, &cfg)
 	if err != nil {
 		err := fmt.Errorf("failed to parse config: %v", err.Error())
 		cclog.ComponentError("JobManager", err.Error())
@@ -69,12 +64,9 @@ func NewJobManager(cluster, subCluster, deviceType string, jobId int64, resource
 		targetToOptimizer: make(map[aggregator.Target]Optimizer),
 		targetToDevices:   make(map[aggregator.Target][]aggregator.Target),
 		cfg:               cfg,
-		resources:         resources,
 		aggregator:        aggregator.New(cfg.AggCfg),
-		cluster:           cluster,
-		subCluster:        subCluster,
+		job:               job,
 		deviceType:        deviceType,
-		jobId:             jobId,
 	}
 
 	intervalSearch, err := time.ParseDuration(cfg.IntervalSearch)
@@ -98,13 +90,13 @@ func NewJobManager(cluster, subCluster, deviceType string, jobId int64, resource
 	case "job":
 		/* Calculate global optimum for all devices on all nodes belonging to job.
 		 * Use one optimizer for everything. */
-		err = initScopeJob(&j, resources, cfg, config)
+		err = initScopeJob(&j, rawCfg)
 	case "node":
 		/* Calculate local optimum for each individual node of a job and apply it to all the devices of a node */
-		err = initScopeNode(&j, resources, cfg, config)
+		err = initScopeNode(&j, rawCfg)
 	case "device":
 		/* Calculate optimum individually for each device for each individual node. */
-		err = initScopeDevice(&j, resources, cfg, config)
+		err = initScopeDevice(&j, rawCfg)
 	default:
 		cclog.Fatalf("Requested unsupported scope: %s", cfg.Scope)
 	}
@@ -113,12 +105,12 @@ func NewJobManager(cluster, subCluster, deviceType string, jobId int64, resource
 		return nil, err
 	}
 
-	cclog.Debugf("Created new job (cluster=%s deviceType=%s)", cluster, deviceType)
+	cclog.Debugf("Created new job (cluster=%s deviceType=%s)", job.Cluster, deviceType)
 
 	return &j, nil
 }
 
-func initScopeJob(j *JobManager, resources []*ccspecs.Resource, cfg optimizerConfig, rawCfg json.RawMessage) error {
+func initScopeJob(j *JobManager, rawCfg json.RawMessage) error {
 	var err error
 	target := aggregator.JobScopeTarget()
 	j.targetToOptimizer[target], err = NewGssOptimizer(rawCfg)
@@ -128,8 +120,8 @@ func initScopeJob(j *JobManager, resources []*ccspecs.Resource, cfg optimizerCon
 
 	devices := make([]aggregator.Target, 0)
 
-	for _, resource := range resources {
-		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, j.deviceType, resource) {
+	for _, resource := range j.job.Resources {
+		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
 			devices = append(devices, aggregator.DeviceScopeTarget(resource.Hostname, deviceId))
 		}
 	}
@@ -138,9 +130,9 @@ func initScopeJob(j *JobManager, resources []*ccspecs.Resource, cfg optimizerCon
 	return nil
 }
 
-func initScopeNode(j *JobManager, resources []*ccspecs.Resource, cfg optimizerConfig, rawCfg json.RawMessage) error {
+func initScopeNode(j *JobManager, rawCfg json.RawMessage) error {
 	var err error
-	for _, resource := range resources {
+	for _, resource := range j.job.Resources {
 		/* Create one optimzer for each host */
 		target := aggregator.NodeScopeTarget(resource.Hostname)
 		j.targetToOptimizer[target], err = NewGssOptimizer(rawCfg)
@@ -150,7 +142,7 @@ func initScopeNode(j *JobManager, resources []*ccspecs.Resource, cfg optimizerCo
 
 		devices := make([]aggregator.Target, 0)
 
-		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, j.deviceType, resource) {
+		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
 			devices = append(devices, aggregator.DeviceScopeTarget(resource.Hostname, deviceId))
 		}
 
@@ -159,10 +151,10 @@ func initScopeNode(j *JobManager, resources []*ccspecs.Resource, cfg optimizerCo
 	return nil
 }
 
-func initScopeDevice(j *JobManager, resources []*ccspecs.Resource, cfg optimizerConfig, rawCfg json.RawMessage) error {
+func initScopeDevice(j *JobManager, rawCfg json.RawMessage) error {
 	var err error
-	for _, resource := range resources {
-		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.cluster, j.deviceType, resource) {
+	for _, resource := range j.job.Resources {
+		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
 			/* Create one optimizer for each device on a host to optimize. */
 			target := aggregator.DeviceScopeTarget(resource.Hostname, deviceId)
 			j.targetToOptimizer[target], err = NewGssOptimizer(rawCfg)
@@ -227,12 +219,10 @@ func (j *JobManager) Start() {
 
 				if !warmUpDone {
 					j.Debug("Warming up...")
-					j.optimizeTicker.Reset(j.intervalSearch)
 					warmUpDone = true
 					for target, optimizer := range j.targetToOptimizer {
 						edp, ok := edpPerTarget[target]
 						if !ok {
-							// initially 
 							warmUpDone = false
 							continue
 						}
@@ -246,6 +236,7 @@ func (j *JobManager) Start() {
 					if !warmUpDone {
 						// Wait until the next tick to run the warmup again
 						warmUpIterCount++
+						j.optimizeTicker.Reset(j.intervalSearch)
 						j.Debug("Not ready yet... (iteration=%d)", warmUpIterCount)
 						break
 					}
@@ -258,7 +249,7 @@ func (j *JobManager) Start() {
 					optimum := fmt.Sprintf("%d", optimizer.Update(edpPerTarget[target]))
 
 					for _, device := range j.targetToDevices[target] {
-						controller.Instance.Set(j.cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimum)
+						controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimum)
 					}
 				}
 			}
@@ -267,7 +258,7 @@ func (j *JobManager) Start() {
 }
 
 func (j *JobManager) Debug(fmtstr string, args ...any) {
-	component := fmt.Sprintf("JobManager(%s,%s,%s,%d)", j.cluster, j.subCluster, j.deviceType, j.jobId)
+	component := fmt.Sprintf("JobManager(%s,%s,%s,%d)", j.job.Cluster, j.job.SubCluster, j.deviceType, j.job.JobID)
 	msg := fmt.Sprintf(fmtstr, args...)
 	cclog.ComponentDebug(component, msg)
 }
