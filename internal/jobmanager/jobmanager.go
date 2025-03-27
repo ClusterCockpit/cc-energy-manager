@@ -93,13 +93,13 @@ func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessag
 	case "job":
 		/* Calculate global optimum for all devices on all nodes belonging to job.
 		 * Use one optimizer for everything. */
-		err = initScopeJob(&j, rawCfg)
+		err = j.initScopeJob(rawCfg)
 	case "node":
 		/* Calculate local optimum for each individual node of a job and apply it to all the devices of a node */
-		err = initScopeNode(&j, rawCfg)
+		err = j.initScopeNode(rawCfg)
 	case "device":
 		/* Calculate optimum individually for each device for each individual node. */
-		err = initScopeDevice(&j, rawCfg)
+		err = j.initScopeDevice(rawCfg)
 	default:
 		cclog.Fatalf("Requested unsupported scope: %s", cfg.Scope)
 	}
@@ -113,7 +113,7 @@ func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessag
 	return &j, nil
 }
 
-func initScopeJob(j *JobManager, rawCfg json.RawMessage) error {
+func (j *JobManager) initScopeJob(rawCfg json.RawMessage) error {
 	var err error
 	target := aggregator.JobScopeTarget()
 	j.targetToOptimizer[target], err = NewGssOptimizer(rawCfg)
@@ -133,7 +133,7 @@ func initScopeJob(j *JobManager, rawCfg json.RawMessage) error {
 	return nil
 }
 
-func initScopeNode(j *JobManager, rawCfg json.RawMessage) error {
+func (j *JobManager) initScopeNode(rawCfg json.RawMessage) error {
 	var err error
 	for _, resource := range j.job.Resources {
 		/* Create one optimzer for each host */
@@ -154,7 +154,7 @@ func initScopeNode(j *JobManager, rawCfg json.RawMessage) error {
 	return nil
 }
 
-func initScopeDevice(j *JobManager, rawCfg json.RawMessage) error {
+func (j *JobManager) initScopeDevice(rawCfg json.RawMessage) error {
 	var err error
 	for _, resource := range j.job.Resources {
 		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
