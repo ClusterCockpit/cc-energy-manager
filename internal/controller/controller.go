@@ -76,6 +76,8 @@ func (c *ccController) Set(cluster string, hostname string, deviceType string, d
 		return err
 	}
 
+	cclog.Debugf("Setting host=%s deviceType=%s deviceId=%s control=%s to %s", hostname, deviceType, deviceId, control, value)
+
 	err = controlClient.SetControlValue(hostname, control, deviceType, deviceId, value)
 	if err != nil {
 		cclog.Warnf("Setting control '%s' on host '%s' on cluster '%s' to value '%s' failed: %v",
