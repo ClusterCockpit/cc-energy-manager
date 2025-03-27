@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"slices"
 
 	"github.com/ClusterCockpit/cc-energy-manager/internal/aggregator"
 	"github.com/ClusterCockpit/cc-energy-manager/internal/controller"
@@ -213,11 +214,19 @@ func (j *JobManager) Start() {
 				j.wg.Done()
 				return
 			case inputVal := <-j.Input:
+				if !j.ManagesDeviceOfMetric(inputVal) {
+					// The metrics we receive may belong to one of our jobmanager's host,
+					// but the actual devices may not be managed by us.
+					break
+				}
 				j.aggregator.AggregateMetric(inputVal)
 			case <-j.optimizeTicker.C:
 				edpPerTarget := j.aggregator.GetEdpPerTarget()
 
 				if !warmUpDone {
+					// TODO IMPORTANT: Afaik there is currently no logic which checks, whether we have
+					// received any new messages or not. If something is misconfigured we will happily optimize
+					// on garbage/out-of-date data. This is undesirable behavior.
 					j.Debug("Warming up...")
 					warmUpDone = true
 					for target, optimizer := range j.targetToOptimizer {
@@ -255,6 +264,43 @@ func (j *JobManager) Start() {
 			}
 		}
 	}()
+}
+
+func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
+	// Since multiple jobs may run on one host, we have to detect if the message actually
+	// belongs to the device, that our JobManager manages.
+	metricHost, _ := m.GetTag("hostname")
+	deviceType, ok := m.GetTag("type")
+	if !ok {
+		j.Debug("Received metric without 'type' tag: %s", m)
+		return false
+	}
+
+	deviceId, ok := m.GetTag("type-id")
+	if !ok {
+		j.Debug("Received metric without 'type-id' tag: %s", m)
+		return false
+	}
+
+	if deviceType != j.deviceType {
+		// Metric device type doesn't belong to the device type that we want to optimizer for
+		return false
+	}
+
+	for _, r := range j.job.Resources {
+		if r.Hostname == metricHost {
+			deviceIds := controller.Instance.GetDeviceIdsForResources(j.job.Cluster, deviceType, r)
+
+			// If the metric's deviceId is present in the list of devices associated with this job manager,
+			// accept the message. If not, discard the message
+			return slices.Index(deviceIds, deviceId) >= 0
+		}
+	}
+
+	// This codepath should usually not be reached, since we catch it earlier in the ClusterManager
+	// if the metric doesn't belong to one of ours hosts.
+	j.Debug("Received metric which doesn't belong to us.")
+	return false
 }
 
 func (j *JobManager) Debug(fmtstr string, args ...any) {
