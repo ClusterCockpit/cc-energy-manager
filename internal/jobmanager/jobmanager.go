@@ -245,6 +245,9 @@ func (j *JobManager) UpdateWarmup(edpPerTarget map[aggregator.Target]float64) {
 	for target, optimizer := range j.targetToOptimizer {
 		edp, ok := edpPerTarget[target]
 		if !ok {
+			if j.warmUpIterCount >= 10 {
+				cclog.Errorf("Unable to warmup. We didn't receive power and performance metrics for 10 iterations. Make sure the configured metrics are available.")
+			}
 			j.warmUpDone = false
 			continue
 		}
