@@ -258,7 +258,12 @@ func (j *JobManager) Start() {
 }
 
 func (j *JobManager) Debug(fmtstr string, args ...any) {
-	component := fmt.Sprintf("JobManager(%s,%s,%s,%d)", j.job.Cluster, j.job.SubCluster, j.deviceType, j.job.JobID)
+	subCluster := j.job.SubCluster
+	if subCluster == "" {
+		// This makes the messages a bit less confusing when SubCluster is blank
+		subCluster = "<empty>"
+	}
+	component := fmt.Sprintf("JobManager(%s,%s,%s,%d)", j.job.Cluster, subCluster, j.deviceType, j.job.JobID)
 	msg := fmt.Sprintf(fmtstr, args...)
 	cclog.ComponentDebug(component, msg)
 }
