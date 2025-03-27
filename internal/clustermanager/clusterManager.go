@@ -121,25 +121,29 @@ func (cm *clusterManager) AddOutput(output chan lp.CCMessage) {
 	cm.output = output
 }
 
-func (cm *clusterManager) StopJob(stopJobData ccspecs.BaseJob) error {
+func (cm *clusterManager) StopJob(stopJobData ccspecs.BaseJob) {
 	// WARNING: stopJobData is reconstructed from the StopJob event and is incomplete.
 	// Be careful which values you use and get the actual job data from the JobManager
 	if len(stopJobData.Cluster) == 0 || stopJobData.JobID == 0 {
-		return fmt.Errorf("job metadata does not contain data for cluster and jobid")
+		cclog.Warnf("job metadata does not contain data for cluster and jobid")
+		return
 	}
 
 	cluster, ok := cm.clusters[stopJobData.Cluster]
 	if !ok {
-		return fmt.Errorf("Cannot stop job on cluster '%s', which we don't know: %s", stopJobData.Cluster, stopJobData)
+		cclog.Warnf("Cannot stop job on cluster '%s', which we don't know: %s", stopJobData.Cluster, stopJobData)
+		return
 	}
 
 	job, ok := cluster.jobIdToJob[stopJobData.JobID]
 	if !ok {
-		return fmt.Errorf("Cannot stop job '%d', which we don't know: %s", stopJobData.JobID, stopJobData)
+		cclog.Warnf("Cannot stop job '%d', which we don't know: %s", stopJobData.JobID, stopJobData)
+		return
 	}
 
 	if len(stopJobData.SubCluster) > 0 && stopJobData.SubCluster != job.data.SubCluster {
-		return fmt.Errorf("Trying to stop jobId '%d' for subCluster '%s', which is different to subcluster started with '%s'", stopJobData.JobID, stopJobData.SubCluster, job.data.SubCluster)
+		cclog.Errorf("Trying to stop jobId '%d' for subCluster '%s', which is different to subcluster started with '%s'", stopJobData.JobID, stopJobData.SubCluster, job.data.SubCluster)
+		return
 	}
 
 	if stopJobData.Cluster != job.data.Cluster {
@@ -159,8 +163,6 @@ func (cm *clusterManager) StopJob(stopJobData ccspecs.BaseJob) error {
 	for _, r := range job.data.Resources {
 		delete(cluster.hostToJobs[r.Hostname], job.data.JobID)
 	}
-
-	return nil
 }
 
 func (cm *clusterManager) registerJobManager(job *Job, deviceType string) {
@@ -328,7 +330,7 @@ func (cm *clusterManager) processEvent(msg lp.CCMessage) {
 			cclog.ComponentError("ClusterManager", err.Error())
 			break
 		}
-		err = cm.StopJob(job)
+		cm.StopJob(job)
 	default:
 		cclog.Warn("Unimplemented job event: %+v", msg)
 	}
