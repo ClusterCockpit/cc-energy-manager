@@ -35,7 +35,7 @@ type Cluster struct {
 type SubCluster struct {
 	subClusterId      SubClusterId
 	deviceTypeToOptimizerConfig map[string]json.RawMessage
-	hostRegexp        *regexp.Regexp
+	hostRegex         *regexp.Regexp
 }
 
 type Job struct {
@@ -72,7 +72,7 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 		Cluster        *string                    `json:"cluster"`
 		SubCluster     *string                    `json:"subcluster"`
 		DeviceTypes    map[string]json.RawMessage `json:"devicetypes"`
-		HostRegexp     *string                    `json:"hostRegexp"`
+		HostRegex      *string                    `json:"hostRegex"`
 	}{}
 
 	err := json.Unmarshal(rawClusterConfig, &clusterConfig)
@@ -80,8 +80,8 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 		return fmt.Errorf("Unable to parse cluster JSON: %w", err)
 	}
 
-	if clusterConfig.Cluster == nil || clusterConfig.SubCluster == nil || clusterConfig.DeviceTypes == nil {
-		return fmt.Errorf("cluster config is missing 'cluster', 'subcluster', or 'devicetypes': %s", string(rawClusterConfig))
+	if clusterConfig.Cluster == nil || clusterConfig.SubCluster == nil || clusterConfig.DeviceTypes == nil || clusterConfig.HostRegex == nil {
+		return fmt.Errorf("cluster config is missing 'cluster', 'subcluster', 'devicetypes', or 'hostRegex': %s", string(rawClusterConfig))
 	}
 
 	subClusterId := SubClusterId{
@@ -108,7 +108,7 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 	cluster.subClusters[*clusterConfig.SubCluster] = &SubCluster{
 		subClusterId:                subClusterId,
 		deviceTypeToOptimizerConfig: clusterConfig.DeviceTypes,
-		hostRegexp:                  regexp.MustCompile(*clusterConfig.HostRegexp),
+		hostRegex:                   regexp.MustCompile(*clusterConfig.HostRegex),
 	}
 	return nil
 }
@@ -437,7 +437,7 @@ func (cm *clusterManager) GetSubClusterIdForHost(hostname string) (SubClusterId,
 		found := false
 		for clusterName, cluster := range cm.clusters {
 			for subClusterName, subcluster := range cluster.subClusters {
-				if subcluster.hostRegexp.MatchString(hostname) {
+				if subcluster.hostRegex.MatchString(hostname) {
 					if found {
 						return SubClusterId{}, fmt.Errorf("Hostname '%s' matches multiple regexes in the config.", hostname)
 					}
