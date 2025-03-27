@@ -297,6 +297,8 @@ func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
 		return false
 	}
 
+	// TODO, the following line breaks for node level metrics, because they do not have a deviceId
+	// For now that's not a problem, since we only optimize for cpus and gpus, which do not have this problem...
 	deviceId, ok := m.GetTag("type-id")
 	if !ok {
 		j.Debug("Received metric without 'type-id' tag: %s", m)
