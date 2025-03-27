@@ -292,14 +292,14 @@ func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
 		return false
 	}
 
-	deviceId, ok := m.GetTag("type-id")
-	if !ok {
-		j.Debug("Received metric without 'type-id' tag: %s", m)
+	if deviceType != j.deviceType {
+		// Metric device type doesn't belong to the device type that we want to optimizer for
 		return false
 	}
 
-	if deviceType != j.deviceType {
-		// Metric device type doesn't belong to the device type that we want to optimizer for
+	deviceId, ok := m.GetTag("type-id")
+	if !ok {
+		j.Debug("Received metric without 'type-id' tag: %s", m)
 		return false
 	}
 
