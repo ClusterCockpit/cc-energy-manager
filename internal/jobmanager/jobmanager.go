@@ -46,8 +46,8 @@ type JobManager struct {
 }
 
 type Optimizer interface {
-	Start(float64) (int, bool)
-	Update(float64) int
+	Start(float64) (float64, bool)
+	Update(float64) float64
 	IsConverged() bool
 }
 

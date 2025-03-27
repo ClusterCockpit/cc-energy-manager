@@ -52,7 +52,7 @@ var (
 	nan     = math.NaN()
 )
 
-func (o *gssOptimizer) Start(fx float64) (x int, ok bool) {
+func (o *gssOptimizer) Start(fx float64) (x float64, ok bool) {
 	o.h = o.b - o.a
 
 	if o.d == o.probe {
@@ -67,15 +67,15 @@ func (o *gssOptimizer) Start(fx float64) (x int, ok bool) {
 	if math.IsNaN(o.fc) {
 		o.c = o.a + invphi2*o.h
 		o.probe = o.c
-		x = int(o.probe)
-		cclog.Debugf("Set probe c to %d", x)
+		x = o.probe
+		cclog.Debugf("Set probe c to %f", x)
 		return x, false
 	}
 	if math.IsNaN(o.fd) {
 		o.d = o.b - invphi2*o.h
 		o.probe = o.d
-		x = int(o.probe)
-		cclog.Debugf("Set probe d to %d", x)
+		x = o.probe
+		cclog.Debugf("Set probe d to %f", x)
 		return x, false
 	}
 
@@ -88,7 +88,7 @@ func (o *gssOptimizer) IsConverged() bool {
 	return o.h < 4*o.tol
 }
 
-func (o *gssOptimizer) Update(fx float64) (x int) {
+func (o *gssOptimizer) Update(fx float64) (x float64) {
 	switch {
 	case o.c == o.probe:
 		cclog.Debugf("Set fc to %f", fx)
@@ -125,7 +125,7 @@ func (o *gssOptimizer) DumpState(position string) {
 	cclog.Debugf("\tfb: %f", o.fb)
 }
 
-func (o *gssOptimizer) NarrowDown() int {
+func (o *gssOptimizer) NarrowDown() float64 {
 	if o.fc < o.fd {
 		if o.h < o.tol { // expand toward lower: c becomes new d and a becomes new c, new probe a
 			o.h = o.h * phi
@@ -153,10 +153,10 @@ func (o *gssOptimizer) NarrowDown() int {
 			cclog.Debugf("\tsearch higher: try next %f", o.probe)
 		}
 	}
-	return int(o.probe)
+	return o.probe
 }
 
-func (o *gssOptimizer) BroadenDown() int {
+func (o *gssOptimizer) BroadenDown() float64 {
 	if math.IsNaN(o.fc) { // treat first step separately
 		o.h = o.h * phi
 		o.d, o.fd, o.c, o.fc, o.a, o.fa = o.c, o.fc, o.a, o.fa, o.b-o.h, nan
@@ -177,10 +177,10 @@ func (o *gssOptimizer) BroadenDown() int {
 		}
 	}
 
-	return int(o.probe)
+	return o.probe
 }
 
-func (o *gssOptimizer) BroadenUp() int {
+func (o *gssOptimizer) BroadenUp() float64 {
 	if math.IsNaN(o.fd) { // treat first step separately
 		o.h = o.h * phi
 		o.c, o.fc, o.d, o.fd, o.b, o.fb = o.d, o.fd, o.b, o.fb, o.a+o.h, nan
@@ -201,7 +201,7 @@ func (o *gssOptimizer) BroadenUp() int {
 		}
 	}
 
-	return int(o.probe)
+	return o.probe
 }
 
 func NewGssOptimizer(config json.RawMessage) (*gssOptimizer, error) {
