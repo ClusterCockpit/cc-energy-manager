@@ -266,6 +266,7 @@ func (j *JobManager) UpdateWarmup(edpPerTarget map[aggregator.Target]float64) {
 		j.warmUpIterCount++
 		j.optimizeTicker.Reset(j.intervalSearch)
 		j.Debug("Not ready yet... (iteration=%d)", j.warmUpIterCount)
+		return
 	}
 
 	j.optimizeTicker.Reset(j.intervalConverged)
