@@ -41,6 +41,8 @@ type JobManager struct {
 	cfg               optimizerConfig
 	job               ccspecs.BaseJob
 	deviceType        string
+	warmUpIterCount   int
+	warmUpDone        bool
 }
 
 type Optimizer interface {
@@ -205,8 +207,9 @@ func (j *JobManager) Start() {
 	j.Debug("Starting")
 
 	go func() {
-		warmUpDone := false
-		warmUpIterCount := 0
+		j.warmUpDone = false
+		j.warmUpIterCount = 0
+
 		for {
 			select {
 			case <-j.done:
@@ -222,48 +225,61 @@ func (j *JobManager) Start() {
 				j.aggregator.AggregateMetric(inputVal)
 			case <-j.optimizeTicker.C:
 				edpPerTarget := j.aggregator.GetEdpPerTarget()
-
-				if !warmUpDone {
-					// TODO IMPORTANT: Afaik there is currently no logic which checks, whether we have
-					// received any new messages or not. If something is misconfigured we will happily optimize
-					// on garbage/out-of-date data. This is undesirable behavior.
-					j.Debug("Warming up...")
-					warmUpDone = true
-					for target, optimizer := range j.targetToOptimizer {
-						edp, ok := edpPerTarget[target]
-						if !ok {
-							warmUpDone = false
-							continue
-						}
-
-						if _, warmUpDoneNew := optimizer.Start(edp); !warmUpDoneNew {
-							// If just a single optimizer is not warmed up, don't go over to normal operation.
-							warmUpDone = false
-						}
-					}
-
-					if !warmUpDone {
-						// Wait until the next tick to run the warmup again
-						warmUpIterCount++
-						j.optimizeTicker.Reset(j.intervalSearch)
-						j.Debug("Not ready yet... (iteration=%d)", warmUpIterCount)
-						break
-					}
-
-					j.optimizeTicker.Reset(j.intervalConverged)
-					j.Debug("Warmup done!")
-				}
-
-				for target, optimizer := range j.targetToOptimizer {
-					optimum := fmt.Sprintf("%d", optimizer.Update(edpPerTarget[target]))
-
-					for _, device := range j.targetToDevices[target] {
-						controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimum)
-					}
+				if !j.warmUpDone {
+					j.UpdateWarmup(edpPerTarget)
+				} else {
+					j.UpdateNormal(edpPerTarget)
 				}
 			}
 		}
 	}()
+}
+
+func (j *JobManager) UpdateWarmup(edpPerTarget map[aggregator.Target]float64) {
+	// TODO IMPORTANT: Afaik there is currently no logic which checks, whether we have
+	// received any new messages or not. If something is misconfigured we will happily optimize
+	// on garbage/out-of-date data. This is undesirable behavior.
+	j.Debug("Warming up...")
+	j.warmUpDone = true
+
+	for target, optimizer := range j.targetToOptimizer {
+		edp, ok := edpPerTarget[target]
+		if !ok {
+			j.warmUpDone = false
+			continue
+		}
+
+		optimum, warmUpDoneTarget := optimizer.Start(edp)
+		if !warmUpDoneTarget {
+			// If just a single optimizer is not warmed up, don't go over to normal operation.
+			j.warmUpDone = false
+		}
+		optimumStr := fmt.Sprintf("%d", optimum)
+
+		for _, device := range j.targetToDevices[target] {
+			controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimumStr)
+		}
+	}
+
+	if !j.warmUpDone {
+		// Wait until the next tick to run the warmup again
+		j.warmUpIterCount++
+		j.optimizeTicker.Reset(j.intervalSearch)
+		j.Debug("Not ready yet... (iteration=%d)", j.warmUpIterCount)
+	}
+
+	j.optimizeTicker.Reset(j.intervalConverged)
+	j.Debug("Warmup done! Took %d iterations.", j.warmUpIterCount)
+}
+
+func (j *JobManager) UpdateNormal(edpPerTarget map[aggregator.Target]float64) {
+	for target, optimizer := range j.targetToOptimizer {
+		optimum := fmt.Sprintf("%d", optimizer.Update(edpPerTarget[target]))
+
+		for _, device := range j.targetToDevices[target] {
+			controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimum)
+		}
+	}
 }
 
 func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
