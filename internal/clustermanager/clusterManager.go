@@ -287,7 +287,9 @@ func (cm *clusterManager) processMetric(msg lp.CCMessage) {
 
 	jobs, ok := cluster.hostToJobs[hostname]
 	if !ok {
-		cclog.ComponentError("ClusterManager", "Received metric with unknown host", hostname)
+		// This can occur in two cases:
+		// - we are receiving a metric for a host we don't manage
+		// - no job was started under that hostname yet, so the map does not exist yet
 		return
 	}
 
