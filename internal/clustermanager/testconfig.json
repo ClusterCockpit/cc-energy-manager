@@ -8,7 +8,7 @@
     {
       "cluster": "fritz",
       "subcluster": "main",
-      "hostRegexp": "^f\d\d\d\d$",
+      "hostRegex": "^f\\d\\d\\d\\d$",
       "devicetypes": {
         "socket": {
           "scope": "node",
