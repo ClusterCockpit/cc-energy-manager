@@ -109,7 +109,7 @@ func getControlClient(c *ccController, cluster string) (cccontrol.CCControlClien
 		// '%c' is replace with the cluster name that is being controlled:
 		// 'mysubject_%c_foobar' --> 'mysubject_mycluster_foobar'
 		newNatsConfig := c.nats
-		newNatsConfig.OutputSubject = strings.ReplaceAll(c.nats.OutputSubject, "%c", cluster)
+		newNatsConfig.RequestSubject = strings.ReplaceAll(c.nats.RequestSubject, "%c", cluster)
 		controlClient, err := cccontrol.NewCCControlClient(newNatsConfig)
 		if err != nil {
 			return nil, fmt.Errorf("NewCCControlClient failed: %w", err)
@@ -206,7 +206,7 @@ func (c *ccController) getTopoForHost(cluster string, hostname string) (*cccontr
 			return nil, fmt.Errorf("GetTopology() failed: %w", err)
 		}
 
-		c.topos[hostname] = topo
+		c.topos[hostname] = *topo
 	}
 
 	/* If we get here, the value must exist in the map. */
