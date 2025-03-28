@@ -405,7 +405,7 @@ func (cm *clusterManager) JobPopulateSubcluster(job *ccspecs.BaseJob) error {
 	if len(job.Resources) == 0 {
 		// This case can only occur if someone is sending 'bad' start_job events without resources
 		// or we are calling this function outside of a start_job context
-		cclog.Fatalf("Cannot determine subcluster for job, which has no resources/hosts: %d\n", job.JobID)
+		return fmt.Errorf("Cannot determine subcluster for job, which has no resources/hosts: %+v\n", job)
 	}
 
 	var subClusterId SubClusterId
