@@ -203,13 +203,13 @@ func (cm *clusterManager) StartJob(startJobData ccspecs.BaseJob) {
 
 	cluster, ok := cm.clusters[startJobData.Cluster]
 	if !ok {
-		cclog.Warnf("Cannot start job for unknown cluster '%s': %d", startJobData.Cluster, startJobData.JobID)
+		cclog.Warnf("Cannot start job for unknown cluster '%s': %+v", startJobData.Cluster, startJobData)
 		return
 	}
 
 	subCluster, ok := cluster.subClusters[startJobData.SubCluster]
 	if !ok {
-		cclog.Warnf("Cannot start job for unknown subcluster '%s': %d", startJobData.SubCluster, startJobData.JobID)
+		cclog.Warnf("Cannot start job for unknown subcluster '%s': %+v", startJobData.SubCluster, startJobData)
 		return
 	}
 
@@ -416,13 +416,13 @@ func (cm *clusterManager) JobPopulateSubcluster(job *ccspecs.BaseJob) error {
 			return err
 		}
 		if subClusterIdCandidate.Cluster != job.Cluster {
-			return fmt.Errorf("configuration Error: Received job with hosts, which belong to a different cluster than configured: %d", job.JobID)
+			return fmt.Errorf("configuration Error: Received job with hosts, which belong to a different cluster than configured: %+v", job)
 		}
 		if !subClusterIdFound {
 			subClusterIdFound = true
 			subClusterId = subClusterIdCandidate
 		} else {
-			return fmt.Errorf("job crosses multiple clusters: %d", job.JobID)
+			return fmt.Errorf("job crosses multiple clusters: %+v", job)
 		}
 	}
 
