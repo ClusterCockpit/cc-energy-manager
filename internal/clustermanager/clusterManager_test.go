@@ -6,7 +6,6 @@ package clustermanager
 
 import (
 	"os"
-	"sync"
 	"testing"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
@@ -14,13 +13,12 @@ import (
 
 func TestNew(t *testing.T) {
 	cclog.Init("debug", false)
-	var wg sync.WaitGroup
 	configFile := "testconfig.json"
 	b, err := os.ReadFile(configFile)
 	if err != nil {
 		t.Error(err.Error())
 	}
-	_, err = NewClusterManager(&wg, b)
+	_, err = NewClusterManager(b)
 	if err != nil {
 		t.Error(err.Error())
 	}

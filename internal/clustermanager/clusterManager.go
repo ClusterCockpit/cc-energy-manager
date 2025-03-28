@@ -7,8 +7,8 @@ package clustermanager
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
 	"regexp"
+	"sync"
 
 	"github.com/ClusterCockpit/cc-energy-manager/internal/jobmanager"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
@@ -16,26 +16,25 @@ import (
 	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
 )
 
-//type JobManagerId struct {
-//	DeviceType string
-//	JobId int64
-//}
-//
+//	type JobManagerId struct {
+//		DeviceType string
+//		JobId int64
+//	}
 type SubClusterId struct {
-	Cluster           string
-	SubCluster        string
+	Cluster    string
+	SubCluster string
 }
 
 type Cluster struct {
-	subClusters            map[string]*SubCluster
-	jobIdToJob             map[int64]*Job
-	hostToJobs             map[string]map[int64]*Job
+	subClusters map[string]*SubCluster
+	jobIdToJob  map[int64]*Job
+	hostToJobs  map[string]map[int64]*Job
 }
 
 type SubCluster struct {
-	subClusterId      SubClusterId
+	subClusterId                SubClusterId
 	deviceTypeToOptimizerConfig map[string]json.RawMessage
-	hostRegex         *regexp.Regexp
+	hostRegex                   *regexp.Regexp
 }
 
 type Job struct {
@@ -68,16 +67,16 @@ func (scid SubClusterId) String() string {
 }
 
 func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
-	clusterConfig := struct{
-		Cluster        *string                    `json:"cluster"`
-		SubCluster     *string                    `json:"subcluster"`
-		DeviceTypes    map[string]json.RawMessage `json:"devicetypes"`
-		HostRegex      *string                    `json:"hostRegex"`
+	clusterConfig := struct {
+		Cluster     *string                    `json:"cluster"`
+		SubCluster  *string                    `json:"subcluster"`
+		DeviceTypes map[string]json.RawMessage `json:"devicetypes"`
+		HostRegex   *string                    `json:"hostRegex"`
 	}{}
 
 	err := json.Unmarshal(rawClusterConfig, &clusterConfig)
 	if err != nil {
-		return fmt.Errorf("Unable to parse cluster JSON: %w", err)
+		return fmt.Errorf("unable to parse cluster JSON: %w", err)
 	}
 
 	if clusterConfig.Cluster == nil || clusterConfig.SubCluster == nil || clusterConfig.DeviceTypes == nil || clusterConfig.HostRegex == nil {
@@ -94,9 +93,9 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 	cluster, ok := cm.clusters[*clusterConfig.Cluster]
 	if !ok {
 		cluster = &Cluster{
-			subClusters:            make(map[string]*SubCluster),
-			jobIdToJob:             make(map[int64]*Job),
-			hostToJobs:             make(map[string]map[int64]*Job),
+			subClusters: make(map[string]*SubCluster),
+			jobIdToJob:  make(map[int64]*Job),
+			hostToJobs:  make(map[string]map[int64]*Job),
 		}
 		cm.clusters[*clusterConfig.Cluster] = cluster
 	}
@@ -131,13 +130,13 @@ func (cm *clusterManager) StopJob(stopJobData ccspecs.BaseJob) {
 
 	cluster, ok := cm.clusters[stopJobData.Cluster]
 	if !ok {
-		cclog.Warnf("Cannot stop job on cluster '%s', which we don't know: %s", stopJobData.Cluster, stopJobData)
+		cclog.Warnf("cannot stop job on cluster '%s', which we don't know", stopJobData.Cluster)
 		return
 	}
 
 	job, ok := cluster.jobIdToJob[stopJobData.JobID]
 	if !ok {
-		cclog.Warnf("Cannot stop job '%d', which we don't know: %s", stopJobData.JobID, stopJobData)
+		cclog.Warnf("cannot stop job '%d', which we don't know", stopJobData.JobID)
 		return
 	}
 
@@ -166,8 +165,8 @@ func (cm *clusterManager) StopJob(stopJobData ccspecs.BaseJob) {
 }
 
 func (cm *clusterManager) registerJobManager(job *Job, deviceType string) {
-	cluster, _ := cm.clusters[job.data.Cluster]
-	subCluster, _ := cluster.subClusters[job.data.SubCluster]
+	cluster := cm.clusters[job.data.Cluster]
+	subCluster := cluster.subClusters[job.data.SubCluster]
 
 	jobManagerConfig, ok := subCluster.deviceTypeToOptimizerConfig[deviceType]
 	if !ok {
@@ -204,19 +203,19 @@ func (cm *clusterManager) StartJob(startJobData ccspecs.BaseJob) {
 
 	cluster, ok := cm.clusters[startJobData.Cluster]
 	if !ok {
-		cclog.Warnf("Cannot start job for unknown cluster '%s': %s", startJobData.Cluster, startJobData)
+		cclog.Warnf("Cannot start job for unknown cluster '%s': %d", startJobData.Cluster, startJobData.JobID)
 		return
 	}
 
 	subCluster, ok := cluster.subClusters[startJobData.SubCluster]
 	if !ok {
-		cclog.Warnf("Cannot start job for unknown subcluster '%s': %s", startJobData.SubCluster, startJobData)
+		cclog.Warnf("Cannot start job for unknown subcluster '%s': %d", startJobData.SubCluster, startJobData.JobID)
 		return
 	}
 
 	job := &Job{
 		deviceTypeToJobMgr: make(map[string]*jobmanager.JobManager),
-		data: startJobData,
+		data:               startJobData,
 	}
 
 	cluster.jobIdToJob[job.data.JobID] = job
@@ -232,7 +231,7 @@ func (cm *clusterManager) StartJob(startJobData ccspecs.BaseJob) {
 	}
 
 	// Start job for CPU Socket optimization
-	for deviceType, _ := range subCluster.deviceTypeToOptimizerConfig {
+	for deviceType := range subCluster.deviceTypeToOptimizerConfig {
 		cm.registerJobManager(job, deviceType)
 	}
 }
@@ -312,7 +311,7 @@ func (cm *clusterManager) processEvent(msg lp.CCMessage) {
 
 	function, ok := msg.GetTag("function")
 	if !ok {
-		cclog.Error("Job event is missing tag 'function': %+v", msg)
+		cclog.Errorf("Job event is missing tag 'function': %+v", msg)
 		return
 	}
 
@@ -332,7 +331,7 @@ func (cm *clusterManager) processEvent(msg lp.CCMessage) {
 		}
 		cm.StopJob(job)
 	default:
-		cclog.Warn("Unimplemented job event: %+v", msg)
+		cclog.Warnf("Unimplemented job event: %+v", msg)
 	}
 }
 
@@ -406,7 +405,7 @@ func (cm *clusterManager) JobPopulateSubcluster(job *ccspecs.BaseJob) error {
 	if len(job.Resources) == 0 {
 		// This case can only occur if someone is sending 'bad' start_job events without resources
 		// or we are calling this function outside of a start_job context
-		cclog.Fatalf("Cannot determine subcluster for job, which has no resources/hosts: %s\n", job)
+		cclog.Fatalf("Cannot determine subcluster for job, which has no resources/hosts: %d\n", job.JobID)
 	}
 
 	var subClusterId SubClusterId
@@ -417,13 +416,13 @@ func (cm *clusterManager) JobPopulateSubcluster(job *ccspecs.BaseJob) error {
 			return err
 		}
 		if subClusterIdCandidate.Cluster != job.Cluster {
-			return fmt.Errorf("Configuration Error: Received job with hosts, which belong to a different cluster than configured: %s", job)
+			return fmt.Errorf("configuration Error: Received job with hosts, which belong to a different cluster than configured: %d", job.JobID)
 		}
 		if !subClusterIdFound {
 			subClusterIdFound = true
 			subClusterId = subClusterIdCandidate
 		} else {
-			return fmt.Errorf("Job crosses multiple clusters: %s", job)
+			return fmt.Errorf("job crosses multiple clusters: %d", job.JobID)
 		}
 	}
 
@@ -443,7 +442,7 @@ func (cm *clusterManager) GetSubClusterIdForHost(hostname string) (SubClusterId,
 			for subClusterName, subcluster := range cluster.subClusters {
 				if subcluster.hostRegex.MatchString(hostname) {
 					if found {
-						return SubClusterId{}, fmt.Errorf("Hostname '%s' matches multiple regexes in the config.", hostname)
+						return SubClusterId{}, fmt.Errorf("hostname '%s' matches multiple regexes in the config", hostname)
 					}
 
 					subClusterId.Cluster = clusterName
@@ -454,7 +453,7 @@ func (cm *clusterManager) GetSubClusterIdForHost(hostname string) (SubClusterId,
 			}
 		}
 		if !found {
-			return SubClusterId{}, fmt.Errorf("Hostname '%s' doesn't match any regex in the config.", hostname)
+			return SubClusterId{}, fmt.Errorf("hostname '%s' doesn't match any regex in the config", hostname)
 		}
 	}
 	return subClusterId, nil

@@ -43,7 +43,7 @@ func TestStart(t *testing.T) {
 		return
 	}
 
-	f := func(v int) float64 {
+	f := func(v float64) float64 {
 		x := float64(v)
 		y := 0.006*x*x - 2.9*x + 400
 
@@ -51,7 +51,7 @@ func TestStart(t *testing.T) {
 	}
 
 	in := 400.0
-	var out int
+	var out float64
 	ok := false
 
 	for !ok {
@@ -76,7 +76,7 @@ func TestOptimize(t *testing.T) {
 		return
 	}
 
-	f := func(v int) float64 {
+	f := func(v float64) float64 {
 		x := float64(v)
 		y := 0.006*x*x - 2.9*x + 400
 
@@ -84,7 +84,7 @@ func TestOptimize(t *testing.T) {
 	}
 
 	in := 400.0
-	var out int
+	var out float64
 	ok := false
 
 	for !ok {
@@ -92,7 +92,7 @@ func TestOptimize(t *testing.T) {
 		in = f(out)
 	}
 	i := 0
-	fmt.Printf("it %d in: %f out: %d\n", i, in, out)
+	fmt.Printf("it %d in: %f out: %f\n", i, in, out)
 
 	for {
 		if i > 20 {
@@ -102,7 +102,7 @@ func TestOptimize(t *testing.T) {
 
 		out = o.Update(in)
 		in = f(out)
-		fmt.Printf("it %d in: %f out: %d\n", i, in, out)
+		fmt.Printf("it %d in: %f out: %f\n", i, in, out)
 
 		if out > 243 && out < 246 {
 			break
@@ -131,13 +131,13 @@ func TestMovingMinimum(t *testing.T) {
 		return
 	}
 
-	f := func(v int) float64 {
+	f := func(v float64) float64 {
 		x := float64(v)
 		y := 0.006*x*x - 2.9*x + 400
 
 		return y
 	}
-	fn := func(v int) float64 {
+	fn := func(v float64) float64 {
 		x := float64(v)
 		y := 0.004*x*x - 2.9*x + 700
 
@@ -145,7 +145,7 @@ func TestMovingMinimum(t *testing.T) {
 	}
 
 	in := 400.0
-	var out int
+	var out float64
 	ok := false
 
 	for !ok {
@@ -153,7 +153,7 @@ func TestMovingMinimum(t *testing.T) {
 		in = f(out)
 	}
 	i := 0
-	fmt.Printf("it %d in: %f out: %d\n", i, in, out)
+	fmt.Printf("it %d in: %f out: %f\n", i, in, out)
 
 	for {
 		if i > 40 {
@@ -167,7 +167,7 @@ func TestMovingMinimum(t *testing.T) {
 		} else {
 			in = fn(out)
 		}
-		fmt.Printf("it %d in: %f out: %d\n", i, in, out)
+		fmt.Printf("it %d in: %f out: %f\n", i, in, out)
 
 		if out > 395 && out < 405 {
 			break
@@ -196,13 +196,13 @@ func TestMovingTwice(t *testing.T) {
 		return
 	}
 
-	f := func(v int) float64 {
+	f := func(v float64) float64 {
 		x := float64(v)
 		y := 0.006*x*x - 2.9*x + 400
 
 		return y
 	}
-	fn := func(v int) float64 {
+	fn := func(v float64) float64 {
 		x := float64(v)
 		y := 0.004*x*x - 2.9*x + 700
 
@@ -210,7 +210,7 @@ func TestMovingTwice(t *testing.T) {
 	}
 
 	in := 400.0
-	var out int
+	var out float64
 	ok := false
 
 	for !ok {
@@ -218,7 +218,7 @@ func TestMovingTwice(t *testing.T) {
 		in = f(out)
 	}
 	i := 0
-	fmt.Printf("it %d in: %f out: %d\n", i, in, out)
+	fmt.Printf("it %d in: %f out: %f\n", i, in, out)
 
 	for {
 		// if i > 60 {
@@ -234,7 +234,7 @@ func TestMovingTwice(t *testing.T) {
 		} else {
 			in = f(out)
 		}
-		fmt.Printf("it %d in: %f out: %d\n", i, in, out)
+		fmt.Printf("it %d in: %f out: %f\n", i, in, out)
 
 		if i > 70 && (out > 238 && out < 242) {
 			break

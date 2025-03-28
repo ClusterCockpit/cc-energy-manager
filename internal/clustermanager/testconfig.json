@@ -1,18 +1,33 @@
 {
-    "budgets" : {
-        "testcluster-partition": {
-            "max_power_budget": 2000.0
-        }
-    },
-    "optimizer" : {
-        "testcluster-partition" : {
-            "interval": "10s",
-            "limits" : {
-                "min": 120,
-                "max": 240,
-                "idle": 120,
-                "step": 1
-            }
-        }
+  "budgets": {
+    "testcluster-partition": {
+      "max_power_budget": 2000.0
     }
+  },
+  "clusters": [
+    {
+      "cluster": "fritz",
+      "subcluster": "main",
+      "hostRegexp": "^f\d\d\d\d$",
+      "devicetypes": {
+        "socket": {
+          "scope": "node",
+          "aggregator": {
+            "type": "last",
+            "powerMetric": "cpu_energy",
+            "performanceMetric": "instructions",
+            "deviceType": "socket"
+          },
+          "controlName": "rapl.pkg_power_limit1",
+          "intervalConverged": "10m",
+          "intervalSearch": "2m",
+          "tolerance": 5,
+          "borders": {
+            "lower": 60,
+            "upper": 700
+          }
+        }
+      }
+    }
+  ]
 }

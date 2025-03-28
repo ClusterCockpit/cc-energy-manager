@@ -7,10 +7,10 @@ package jobmanager
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
-	"slices"
 
 	"github.com/ClusterCockpit/cc-energy-manager/internal/aggregator"
 	"github.com/ClusterCockpit/cc-energy-manager/internal/controller"
@@ -257,7 +257,7 @@ func (j *JobManager) UpdateWarmup(edpPerTarget map[aggregator.Target]float64) {
 			// If just a single optimizer is not warmed up, don't go over to normal operation.
 			j.warmUpDone = false
 		}
-		optimumStr := fmt.Sprintf("%d", optimum)
+		optimumStr := fmt.Sprintf("%f", optimum)
 
 		for _, device := range j.targetToDevices[target] {
 			controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimumStr)
@@ -278,7 +278,7 @@ func (j *JobManager) UpdateWarmup(edpPerTarget map[aggregator.Target]float64) {
 
 func (j *JobManager) UpdateNormal(edpPerTarget map[aggregator.Target]float64) {
 	for target, optimizer := range j.targetToOptimizer {
-		optimum := fmt.Sprintf("%d", optimizer.Update(edpPerTarget[target]))
+		optimum := fmt.Sprintf("%f", optimizer.Update(edpPerTarget[target]))
 
 		for _, device := range j.targetToDevices[target] {
 			controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimum)
