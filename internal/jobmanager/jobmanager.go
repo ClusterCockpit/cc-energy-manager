@@ -260,6 +260,7 @@ func (j *JobManager) UpdateWarmup(edpPerTarget map[aggregator.Target]float64) {
 			j.warmUpDone = false
 		}
 		optimumStr := fmt.Sprintf("%f", optimum)
+		j.Debug("%v: edp=%f --> optimum=%f", target, edp, optimum)
 
 		for _, device := range j.targetToDevices[target] {
 			controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimumStr)
@@ -280,7 +281,10 @@ func (j *JobManager) UpdateWarmup(edpPerTarget map[aggregator.Target]float64) {
 
 func (j *JobManager) UpdateNormal(edpPerTarget map[aggregator.Target]float64) {
 	for target, optimizer := range j.targetToOptimizer {
-		optimum := fmt.Sprintf("%f", optimizer.Update(edpPerTarget[target]))
+		edp := edpPerTarget[target]
+
+		optimum := fmt.Sprintf("%f", optimizer.Update(edp))
+		j.Debug("%v: edp=%f --> optimum=%s", target, edp, optimum)
 
 		for _, device := range j.targetToDevices[target] {
 			controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimum)
