@@ -298,7 +298,7 @@ func (j *JobManager) ResetToDefault() {
 		return
 	}
 
-	v := fmt.Sprintf("%f")
+	v := fmt.Sprintf("%f", *j.cfg.ControlDefaultValue)
 
 	j.Debug("Resetting device to default value...")
 	for target, _ := range j.targetToOptimizer {
