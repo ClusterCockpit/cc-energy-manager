@@ -23,7 +23,7 @@ type optimizerConfig struct {
 	Scope             string          `json:"scope"`
 	AggCfg            json.RawMessage `json:"aggregator"`
 	ControlName       string          `json:"controlName"`
-	ControlDefaultValue string        `json:"controlDefaultValue"`
+	ControlDefaultValue *float64      `json:"controlDefaultValue"`
 	IntervalConverged string          `json:"intervalConverged"`
 	IntervalSearch    string          `json:"intervalSearch"`
 }
@@ -289,15 +289,17 @@ func (j *JobManager) UpdateNormal(edpPerTarget map[aggregator.Target]float64) {
 }
 
 func (j *JobManager) ResetToDefault() {
-	if j.cfg.ControlDefaultValue == "" {
+	if j.cfg.ControlDefaultValue == nil {
 		j.Debug("No control default value specified in config. Not resetting power limits.")
 		return
 	}
 
+	v := fmt.Sprintf("%f")
+
 	j.Debug("Resetting device to default value...")
 	for target, _ := range j.targetToOptimizer {
 		for _, device := range j.targetToDevices[target] {
-			controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, j.cfg.ControlDefaultValue)
+			controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, v)
 		}
 	}
 }
