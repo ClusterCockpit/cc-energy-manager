@@ -49,7 +49,7 @@ func NewTraceOptimizer(config json.RawMessage) (*traceOptimizer, error) {
 	}
 
 	if c.TracePath == "" {
-		return nil, fmt.Errorf("traceFile missing in optimizer config")
+		return nil, fmt.Errorf("tracePath missing in optimizer config")
 	}
 
 	if c.IterationsPerProbe <= 0 {
