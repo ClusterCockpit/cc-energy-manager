@@ -15,7 +15,6 @@ import (
 )
 
 type traceOptimizerConfig struct {
-	Tolerance float64 `json:"tolerance"`
 	Borders   struct {
 		Lower *float64 `json:"lower"`
 		Upper *float64 `json:"upper"`
@@ -37,7 +36,6 @@ type traceOptimizer struct {
 
 func NewTraceOptimizer(config json.RawMessage) (*traceOptimizer, error) {
 	var c traceOptimizerConfig
-	c.Tolerance = 10
 
 	err := json.Unmarshal(config, &c)
 	if err != nil {

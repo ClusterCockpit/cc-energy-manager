@@ -19,13 +19,14 @@ import (
 	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
 )
 
-type optimizerConfig struct {
+type jobManagerConfig struct {
 	Scope             string          `json:"scope"`
 	AggCfg            json.RawMessage `json:"aggregator"`
 	ControlName       string          `json:"controlName"`
 	ControlDefaultValue *float64      `json:"controlDefaultValue"`
 	IntervalConverged string          `json:"intervalConverged"`
 	IntervalSearch    string          `json:"intervalSearch"`
+	OptimizerCfg      json.RawMessage `json:"optimizer"`
 }
 
 type JobManager struct {
@@ -39,7 +40,7 @@ type JobManager struct {
 	targetToDevices   map[aggregator.Target][]aggregator.Target
 	optimizeTicker    *time.Ticker
 	started           bool
-	cfg               optimizerConfig
+	cfg               jobManagerConfig
 	job               ccspecs.BaseJob
 	deviceType        string
 	warmUpIterCount   int
@@ -49,11 +50,31 @@ type JobManager struct {
 type Optimizer interface {
 	Start(float64) (float64, bool)
 	Update(float64) float64
-	IsConverged() bool
+}
+
+func NewOptimizer(rawConfig json.RawMessage) (Optimizer, error) {
+	var cfg struct {
+		Type string `json:"type"`
+	}
+
+	if err := json.Unmarshal(rawConfig, &cfg); err != nil {
+		return nil, fmt.Errorf("Unable to parse optimizer config: %v", err)
+	}
+
+	switch cfg.Type {
+	case "gss":
+		return NewGssOptimizer(rawConfig)
+	case "trace":
+		return NewTraceOptimizer(rawConfig)
+	case "test":
+		return NewTestOptimizer(rawConfig)
+	default:
+		return nil, fmt.Errorf("Invalid/unsupported optimizer type: %s", cfg.Type)
+	}
 }
 
 func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessage) (*JobManager, error) {
-	var cfg optimizerConfig
+	var cfg jobManagerConfig
 
 	err := json.Unmarshal(rawCfg, &cfg)
 	if err != nil {
@@ -94,13 +115,13 @@ func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessag
 	case "job":
 		/* Calculate global optimum for all devices on all nodes belonging to job.
 		 * Use one optimizer for everything. */
-		err = j.initScopeJob(rawCfg)
+		err = j.initScopeJob(cfg.OptimizerCfg)
 	case "node":
 		/* Calculate local optimum for each individual node of a job and apply it to all the devices of a node */
-		err = j.initScopeNode(rawCfg)
+		err = j.initScopeNode(cfg.OptimizerCfg)
 	case "device":
 		/* Calculate optimum individually for each device for each individual node. */
-		err = j.initScopeDevice(rawCfg)
+		err = j.initScopeDevice(cfg.OptimizerCfg)
 	default:
 		cclog.Fatalf("Requested unsupported scope: %s", cfg.Scope)
 	}
@@ -117,7 +138,7 @@ func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessag
 func (j *JobManager) initScopeJob(rawCfg json.RawMessage) error {
 	var err error
 	target := aggregator.JobScopeTarget()
-	j.targetToOptimizer[target], err = NewGssOptimizer(rawCfg)
+	j.targetToOptimizer[target], err = NewOptimizer(rawCfg)
 	if err != nil {
 		return err
 	}
@@ -139,7 +160,7 @@ func (j *JobManager) initScopeNode(rawCfg json.RawMessage) error {
 	for _, resource := range j.job.Resources {
 		/* Create one optimzer for each host */
 		target := aggregator.NodeScopeTarget(resource.Hostname)
-		j.targetToOptimizer[target], err = NewGssOptimizer(rawCfg)
+		j.targetToOptimizer[target], err = NewOptimizer(rawCfg)
 		if err != nil {
 			return err
 		}
@@ -161,7 +182,7 @@ func (j *JobManager) initScopeDevice(rawCfg json.RawMessage) error {
 		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
 			/* Create one optimizer for each device on a host to optimize. */
 			target := aggregator.DeviceScopeTarget(resource.Hostname, deviceId)
-			j.targetToOptimizer[target], err = NewGssOptimizer(rawCfg)
+			j.targetToOptimizer[target], err = NewOptimizer(rawCfg)
 			if err != nil {
 				return err
 			}
