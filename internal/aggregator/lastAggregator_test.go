@@ -72,21 +72,21 @@ func TestAggregateSingleDevice(t *testing.T) {
 		ag.AggregateMetric(m)
 	}
 
-	edp := ag.GetEdpPerTarget()
+	pdp := ag.GetPdpPerTarget()
 
 	target := Target{HostName: "m1203", DeviceId: "0"}
-	if edp[target] != power/instructions {
-		t.Errorf("expected %f, got %f", power/instructions, edp[target])
+	if pdp[target] != power/instructions {
+		t.Errorf("expected %f, got %f", power/instructions, pdp[target])
 	}
 
 	target = Target{HostName: "m1203"}
-	if edp[target] != power/instructions {
-		t.Errorf("expected %f, got %f", power/instructions, edp[target])
+	if pdp[target] != power/instructions {
+		t.Errorf("expected %f, got %f", power/instructions, pdp[target])
 	}
 
 	target = Target{}
-	if edp[target] != power/instructions {
-		t.Errorf("expected %f, got %f", power/instructions, edp[target])
+	if pdp[target] != power/instructions {
+		t.Errorf("expected %f, got %f", power/instructions, pdp[target])
 	}
 }
 
@@ -134,17 +134,17 @@ func TestAggregateMultipleHosts(t *testing.T) {
 		}
 	}
 
-	edp := ag.GetEdpPerTarget()
+	pdp := ag.GetPdpPerTarget()
 
 	for i, host := range hosts {
 		target := Target{HostName: host, DeviceId: "0"}
-		if edp[target] != power[i]/instructions[i] {
-			t.Errorf("expected %f, got %f", power[i]/instructions[i], edp[target])
+		if pdp[target] != power[i]/instructions[i] {
+			t.Errorf("expected %f, got %f", power[i]/instructions[i], pdp[target])
 		}
 
 		target = Target{HostName: host}
-		if edp[target] != power[i]/instructions[i] {
-			t.Errorf("expected %f, got %f", power[i]/instructions[i], edp[target])
+		if pdp[target] != power[i]/instructions[i] {
+			t.Errorf("expected %f, got %f", power[i]/instructions[i], pdp[target])
 		}
 	}
 }

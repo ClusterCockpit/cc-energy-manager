@@ -86,14 +86,14 @@ func (o *traceOptimizer) Start(_ float64) (float64, bool) {
 	return o.current, true
 }
 
-func (o *traceOptimizer) Update(edp float64) float64 {
+func (o *traceOptimizer) Update(pdp float64) float64 {
 	if o.iteration <= 0 {
 		o.iteration = 1
 		return o.current
 	}
 
 	t := time.Now().Format(time.TimeOnly)
-	o.traceHandle.Write([]byte(fmt.Sprintf("[%s] Limit=%f --> EDP=%f\n", t, o.current, edp)))
+	o.traceHandle.Write([]byte(fmt.Sprintf("[%s] Limit=%f --> PDP=%f\n", t, o.current, pdp)))
 	o.traceHandle.Sync()
 
 	if o.iteration == o.iterationsPerProbe {

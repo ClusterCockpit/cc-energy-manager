@@ -16,11 +16,11 @@ import (
 type Aggregator interface {
 	// Add a metric to this aggregator
 	AggregateMetric(m lp.CCMessage)
-	// Get the current EDP vor all known targets.
-	// The returned map maps all available target names to EDP.
+	// Get the current PDP vor all known targets.
+	// The returned map maps all available target names to PDP.
 	// If metrics for certain hosts or devices have not yet been received,
 	// they will not be present in this map. Your code should handle this accordingly
-	GetEdpPerTarget() map[Target]float64
+	GetPdpPerTarget() map[Target]float64
 }
 
 type Target struct {
@@ -101,43 +101,43 @@ func (t Target) String() string {
 	return t.HostName
 }
 
-// This function receives a map `map[hostname]map[deviceId]edp` and
-// returns a `map[targetName]edp`.
+// This function receives a map `map[hostname]map[deviceId]pdp` and
+// returns a `map[targetName]pdp`.
 // All target scopes are calculated, regardless of the actual scope used.
 // The upper scoppes are calculated by averaging the values. Perhaps we should make
 // this configurable.
-func DeviceEdpToTargetEdp(edpMap map[string]map[string]float64) map[Target]float64 {
-	jobEdp := 0.0
+func DevicePdpToTargetPdp(pdpMap map[string]map[string]float64) map[Target]float64 {
+	jobPdp := 0.0
 	jobNumDevices := 0
 
-	targetEdp := make(map[Target]float64)
+	targetPdp := make(map[Target]float64)
 
-	for hostname, deviceIdToEdp := range edpMap {
-		hostEdp := 0.0
+	for hostname, deviceIdToPdp := range pdpMap {
+		hostPdp := 0.0
 		hostNumDevices := 0
 
-		for deviceId, edp := range deviceIdToEdp {
-			hostEdp += edp
+		for deviceId, pdp := range deviceIdToPdp {
+			hostPdp += pdp
 			hostNumDevices++
 
-			targetEdp[DeviceScopeTarget(hostname, deviceId)] = edp
+			targetPdp[DeviceScopeTarget(hostname, deviceId)] = pdp
 		}
 
-		jobEdp += hostEdp
+		jobPdp += hostPdp
 		jobNumDevices += hostNumDevices
 
 		if hostNumDevices > 0 {
-			hostEdp /= float64(hostNumDevices)
-			targetEdp[NodeScopeTarget(hostname)] = hostEdp
+			hostPdp /= float64(hostNumDevices)
+			targetPdp[NodeScopeTarget(hostname)] = hostPdp
 		}
 	}
 
 	if jobNumDevices > 0 {
-		jobEdp /= float64(jobNumDevices)
-		targetEdp[JobScopeTarget()] = jobEdp
+		jobPdp /= float64(jobNumDevices)
+		targetPdp[JobScopeTarget()] = jobPdp
 	}
 
-	return targetEdp
+	return targetPdp
 }
 
 func checkAndGetMetricFields(m lp.CCMessage, wantedDeviceType string) (hostname string, deviceId string, value float64, ok bool) {
