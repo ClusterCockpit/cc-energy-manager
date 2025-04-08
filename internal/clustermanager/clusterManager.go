@@ -260,29 +260,15 @@ func (cm *clusterManager) processMetric(msg lp.CCMessage) {
 		return
 	}
 
-	// The 'cluster' tag is not strictly necessary here, since we can also obtain it via GetSubClusterIdForHost
-	// However, it allows us to do some sanity checking, which is probably a good thing.
-	clusterName, ok := msg.GetTag("cluster")
-	if !ok {
-		cclog.ComponentError("ClusterManager", "Incoming message is missing tag 'cluster': %+v", msg)
-		return
-	}
-
-	cluster, ok := cm.clusters[clusterName]
-	if !ok {
-		cclog.ComponentError("ClusterManager", "Unable to process metric for unknown cluster:", clusterName)
-		return
-	}
-
 	subClusterId, err := cm.GetSubClusterIdForHost(hostname)
 	if err != nil {
 		cclog.ComponentError("ClusterManager", "Unable to determine cluster/subcluster for host '%s': %s", hostname, err)
 		return
 	}
 
-	if subClusterId.Cluster != clusterName {
-		// If everything is configured correctl, this case should usually not occur
-		cclog.ComponentError("ClusterManager", "Received metric with inconsistent hostname <-> cluster mapping")
+	cluster, ok := cm.clusters[subClusterId.Cluster]
+	if !ok {
+		cclog.ComponentError("ClusterManager", "Unable to process metric for unknown cluster:", subClusterId.Cluster)
 		return
 	}
 
