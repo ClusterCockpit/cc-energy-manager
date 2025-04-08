@@ -20,13 +20,13 @@ import (
 )
 
 type jobManagerConfig struct {
-	Scope             string          `json:"scope"`
-	AggCfg            json.RawMessage `json:"aggregator"`
-	ControlName       string          `json:"controlName"`
-	ControlDefaultValue *float64      `json:"controlDefaultValue"`
-	IntervalConverged string          `json:"intervalConverged"`
-	IntervalSearch    string          `json:"intervalSearch"`
-	OptimizerCfg      json.RawMessage `json:"optimizer"`
+	Scope               string          `json:"scope"`
+	AggCfg              json.RawMessage `json:"aggregator"`
+	ControlName         string          `json:"controlName"`
+	ControlDefaultValue *float64        `json:"controlDefaultValue"`
+	IntervalConverged   string          `json:"intervalConverged"`
+	IntervalSearch      string          `json:"intervalSearch"`
+	OptimizerCfg        json.RawMessage `json:"optimizer"`
 }
 
 type JobManager struct {

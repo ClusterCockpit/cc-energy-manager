@@ -8,30 +8,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 	"runtime"
+	"time"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 )
 
 type traceOptimizerConfig struct {
-	Borders   struct {
+	Borders struct {
 		Lower *float64 `json:"lower"`
 		Upper *float64 `json:"upper"`
 	} `json:"borders,omitempty"`
-	TracePath string `json:"tracePath"`
-	TraceResolution int `json:"traceResolution"`
-	IterationsPerProbe int `json:"iterationsPerProbe"`
+	TracePath          string `json:"tracePath"`
+	TraceResolution    int    `json:"traceResolution"`
+	IterationsPerProbe int    `json:"iterationsPerProbe"`
 }
 
 type traceOptimizer struct {
-	lowerBound float64
-	upperBound float64
-	traceHandle *os.File
-	traceResolution int
-	iteration int
+	lowerBound         float64
+	upperBound         float64
+	traceHandle        *os.File
+	traceResolution    int
+	iteration          int
 	iterationsPerProbe int
-	current float64
+	current            float64
 }
 
 func NewTraceOptimizer(config json.RawMessage) (*traceOptimizer, error) {
@@ -61,10 +61,10 @@ func NewTraceOptimizer(config json.RawMessage) (*traceOptimizer, error) {
 	}
 
 	o := traceOptimizer{
-		lowerBound: *c.Borders.Lower,
-		upperBound: *c.Borders.Upper,
+		lowerBound:         *c.Borders.Lower,
+		upperBound:         *c.Borders.Upper,
 		iterationsPerProbe: c.IterationsPerProbe,
-		traceResolution: c.TraceResolution,
+		traceResolution:    c.TraceResolution,
 	}
 
 	fileName := fmt.Sprintf("trace_%s_*.txt", time.Now().Format(time.RFC3339))
