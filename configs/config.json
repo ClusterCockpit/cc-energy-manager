@@ -24,16 +24,20 @@
           "aggregator": {
             "type": "last",
             "powerMetric": "cpu_energy",
-            "performanceMetric": "instructions",
+            "performanceMetric": "ips",
             "deviceType": "socket"
           },
           "controlName": "rapl.pkg_power_limit1",
+          "controlDefaultValue": 300,
           "intervalConverged": "10m",
           "intervalSearch": "2m",
-          "tolerance": 5,
-          "borders": {
-            "lower": 60,
-            "upper": 700
+          "optimizer": {
+            "type": "gss",
+            "tolerance": 5,
+            "borders": {
+              "lower": 123,
+              "upper": 800
+            }
           }
         }
       }
@@ -52,12 +56,16 @@
             "deviceType": "nvidia_gpu"
           },
           "controlName": "nvml.power_limit",
+          "controlDefaultValue": 250,
           "intervalConverged": "5m",
           "intervalSearch": "2m",
-          "tolerance": 5,
-          "borders": {
-            "lower": 80,
-            "upper": 1000
+          "optimizer": {
+            "type": "gss",
+            "tolerance": 5,
+            "borders": {
+              "lower": 123,
+              "upper": 800
+            }
           }
         },
         "socket" :{
@@ -67,17 +75,20 @@
           "aggregator": {
             "type": "median",
             "powerMetric": "cpu_energy",
-            "performanceMetric": "instructions",
-            "deviceType": "nvidia_gpu",
-            "windowSize": 5
+            "performanceMetric": "ips",
+            "deviceType": "nvidia_gpu"
           },
           "controlName": "rapl.pkg_power_limit1",
+          "controlDefaultValue": 100,
           "intervalConverged": "5m",
           "intervalSearch": "2m",
-          "tolerance": 5,
-          "borders": {
-            "lower": 123,
-            "upper": 800
+          "optimizer": {
+            "type": "gss",
+            "tolerance": 5,
+            "borders": {
+              "lower": 123,
+              "upper": 800
+            }
           }
         }
       }
