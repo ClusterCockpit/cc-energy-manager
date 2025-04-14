@@ -7,6 +7,7 @@ package clustermanager
 import (
 	"os"
 	"testing"
+	"encoding/json"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 )
@@ -14,13 +15,22 @@ import (
 func TestNew(t *testing.T) {
 	cclog.Init("debug", false)
 	configFile := "testconfig.json"
-	b, err := os.ReadFile(configFile)
+	configBytes, err := os.ReadFile(configFile)
 	if err != nil {
-		t.Error(err.Error())
+		t.Fatal(err.Error())
 	}
-	_, err = NewClusterManager(b)
+
+	config := struct{
+		Clusters json.RawMessage `json:"clusters"`
+	}{}
+	err = json.Unmarshal(configBytes, &config)
 	if err != nil {
-		t.Error(err.Error())
+		t.Fatal(err.Error())
+	}
+
+	_, err = NewClusterManager(config.Clusters)
+	if err != nil {
+		t.Fatalf("NewClusterManger() failed: %v", err)
 	}
 }
 
