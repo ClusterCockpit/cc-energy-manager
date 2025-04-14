@@ -2,7 +2,7 @@
 // All rights reserved. This file is part of cc-energy-manager.
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
-package jobmanager
+package optimizer
 
 import (
 	"encoding/json"

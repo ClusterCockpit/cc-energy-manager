@@ -14,6 +14,8 @@ import (
 
 	"github.com/ClusterCockpit/cc-energy-manager/internal/aggregator"
 	"github.com/ClusterCockpit/cc-energy-manager/internal/controller"
+	"github.com/ClusterCockpit/cc-energy-manager/internal/optimizer"
+
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
 	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
@@ -36,7 +38,7 @@ type JobManager struct {
 	intervalSearch    time.Duration
 	intervalConverged time.Duration
 	aggregator        aggregator.Aggregator
-	targetToOptimizer map[aggregator.Target]Optimizer
+	targetToOptimizer map[aggregator.Target]optimizer.Optimizer
 	targetToDevices   map[aggregator.Target][]aggregator.Target
 	optimizeTicker    *time.Ticker
 	started           bool
@@ -45,32 +47,6 @@ type JobManager struct {
 	deviceType        string
 	warmUpIterCount   int
 	warmUpDone        bool
-}
-
-type Optimizer interface {
-	Start(float64) (float64, bool)
-	Update(float64) float64
-}
-
-func NewOptimizer(rawConfig json.RawMessage) (Optimizer, error) {
-	var cfg struct {
-		Type string `json:"type"`
-	}
-
-	if err := json.Unmarshal(rawConfig, &cfg); err != nil {
-		return nil, fmt.Errorf("Unable to parse optimizer config: %v", err)
-	}
-
-	switch cfg.Type {
-	case "gss":
-		return NewGssOptimizer(rawConfig)
-	case "trace":
-		return NewTraceOptimizer(rawConfig)
-	case "test":
-		return NewTestOptimizer(rawConfig)
-	default:
-		return nil, fmt.Errorf("Invalid/unsupported optimizer type: %s", cfg.Type)
-	}
 }
 
 func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessage) (*JobManager, error) {
@@ -86,7 +62,7 @@ func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessag
 	j := JobManager{
 		done:              make(chan struct{}),
 		started:           false,
-		targetToOptimizer: make(map[aggregator.Target]Optimizer),
+		targetToOptimizer: make(map[aggregator.Target]optimizer.Optimizer),
 		targetToDevices:   make(map[aggregator.Target][]aggregator.Target),
 		cfg:               cfg,
 		aggregator:        aggregator.New(cfg.AggCfg),
@@ -138,7 +114,7 @@ func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessag
 func (j *JobManager) initScopeJob(rawCfg json.RawMessage) error {
 	var err error
 	target := aggregator.JobScopeTarget()
-	j.targetToOptimizer[target], err = NewOptimizer(rawCfg)
+	j.targetToOptimizer[target], err = optimizer.NewOptimizer(rawCfg)
 	if err != nil {
 		return err
 	}
@@ -160,7 +136,7 @@ func (j *JobManager) initScopeNode(rawCfg json.RawMessage) error {
 	for _, resource := range j.job.Resources {
 		/* Create one optimzer for each host */
 		target := aggregator.NodeScopeTarget(resource.Hostname)
-		j.targetToOptimizer[target], err = NewOptimizer(rawCfg)
+		j.targetToOptimizer[target], err = optimizer.NewOptimizer(rawCfg)
 		if err != nil {
 			return err
 		}
@@ -182,7 +158,7 @@ func (j *JobManager) initScopeDevice(rawCfg json.RawMessage) error {
 		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
 			/* Create one optimizer for each device on a host to optimize. */
 			target := aggregator.DeviceScopeTarget(resource.Hostname, deviceId)
-			j.targetToOptimizer[target], err = NewOptimizer(rawCfg)
+			j.targetToOptimizer[target], err = optimizer.NewOptimizer(rawCfg)
 			if err != nil {
 				return err
 			}
