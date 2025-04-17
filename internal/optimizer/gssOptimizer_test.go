@@ -12,6 +12,9 @@ import (
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 )
 
+// TODO:
+// Implement test with noisy and flat function
+
 func TestInit(t *testing.T) {
 	testconfig := `{
       "tol": 10,
@@ -312,7 +315,7 @@ func TestUpperBarrier(t *testing.T) {
 
 	f := func(v float64) float64 {
 		x := float64(v)
-		y := -0.8*x + 600
+		y := -0.6*x + 600
 
 		return y
 	}
@@ -331,7 +334,7 @@ func TestUpperBarrier(t *testing.T) {
 		out = o.Update(in)
 		in = f(out)
 
-		if out > 810 {
+		if out > 610 {
 			t.Errorf("exceed upper barrier %d: %f", i, out)
 		}
 		if i > 70 {
