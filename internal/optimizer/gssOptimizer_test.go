@@ -169,7 +169,7 @@ func TestMovingMinimum(t *testing.T) {
 		}
 		fmt.Printf("it %d in: %f out: %f\n", i, in, out)
 
-		if out > 395 && out < 405 {
+		if out > 364 && out < 368 {
 			break
 		}
 
