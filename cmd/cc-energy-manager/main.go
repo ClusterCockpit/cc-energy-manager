@@ -24,7 +24,7 @@ var (
 	SinkManager                            sinks.SinkManager
 	ReceiveManager                         receivers.ReceiveManager
 	ClustManager                           cmanager.ClusterManager
-	ShutdownWG                                   sync.WaitGroup
+	ShutdownWG                             sync.WaitGroup
 	flagOnce, flagVersion, flagLogDateTime bool
 	flagConfigFile, flagLogLevel           string
 )
@@ -75,33 +75,33 @@ func mainFunc() int {
 		SinkManager, err = sinks.New(&ShutdownWG, cfg)
 		if err != nil {
 			cclog.Error(err.Error())
-			return 1
+			return -1
 		}
 	} else {
 		cclog.Error("Sink configuration must be present")
-		return 1
+		return -1
 	}
 
 	if cfg := cfg.GetPackageConfig("receivers"); cfg != nil {
 		ReceiveManager, err = receivers.New(&ShutdownWG, cfg)
 		if err != nil {
 			cclog.Error(err.Error())
-			return 1
+			return -1
 		}
 	} else {
 		cclog.Error("Receiver configuration must be present")
-		return 1
+		return -1
 	}
 
 	if cfg := cfg.GetPackageConfig("clusters"); cfg != nil {
 		ClustManager, err = cmanager.NewClusterManager(cfg)
 		if err != nil {
 			cclog.Error(err.Error())
-			return 1
+			return -1
 		}
 	} else {
 		cclog.Error("Optimizer configuration must be present")
-		return 1
+		return -1
 	}
 
 	if cfg := cfg.GetPackageConfig("controller"); cfg != nil {

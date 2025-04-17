@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -170,14 +169,6 @@ func (j *JobManager) initScopeDevice(rawCfg json.RawMessage) error {
 	return nil
 }
 
-func isSocketMetric(metric string) bool {
-	return (strings.Contains(metric, "power") || strings.Contains(metric, "energy") || metric == "mem_bw")
-}
-
-func isAcceleratorMetric(metric string) bool {
-	return strings.HasPrefix(metric, "acc_")
-}
-
 func (j *JobManager) AddInput(input chan lp.CCMessage) {
 	j.Input = input
 }
@@ -298,7 +289,7 @@ func (j *JobManager) ResetToDefault() {
 	v := fmt.Sprintf("%f", *j.cfg.ControlDefaultValue)
 
 	j.Debug("Resetting device to default value...")
-	for target, _ := range j.targetToOptimizer {
+	for target := range j.targetToOptimizer {
 		for _, device := range j.targetToDevices[target] {
 			controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, v)
 		}

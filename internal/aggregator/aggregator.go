@@ -53,7 +53,7 @@ func New(rawConfig json.RawMessage) Aggregator {
 	return ag
 }
 
-func valueToFloat64(value interface{}) (float64, error) {
+func valueToFloat64(value any) (float64, error) {
 	switch v := value.(type) {
 	case float64:
 		return v, nil
@@ -104,7 +104,7 @@ func (t Target) String() string {
 // This function receives a map `map[hostname]map[deviceId]pdp` and
 // returns a `map[targetName]pdp`.
 // All target scopes are calculated, regardless of the actual scope used.
-// The upper scoppes are calculated by averaging the values. Perhaps we should make
+// The upper scopes are calculated by averaging the values. Perhaps we should make
 // this configurable.
 func DevicePdpToTargetPdp(pdpMap map[string]map[string]float64) map[Target]float64 {
 	jobPdp := 0.0
@@ -146,7 +146,7 @@ func checkAndGetMetricFields(m lp.CCMessage, wantedDeviceType string) (hostname 
 	// Mind the named return values and the naked return statements!
 	if !m.IsMetric() {
 		cclog.Debugf("Unable to aggregate non-metric message: %+v", m)
-		return 
+		return
 	}
 
 	hostname, ok = m.GetTag("hostname")
@@ -170,7 +170,7 @@ func checkAndGetMetricFields(m lp.CCMessage, wantedDeviceType string) (hostname 
 
 	if deviceType != wantedDeviceType {
 		// this log message can probably be removed, since this case is not unusual
-		//cclog.Debugf("Ignoring metric of non-matching type '%s', wanted '%s'", deviceType, a.deviceType)
+		// cclog.Debugf("Ignoring metric of non-matching type '%s', wanted '%s'", deviceType, a.deviceType)
 		ok = false
 		return
 	}

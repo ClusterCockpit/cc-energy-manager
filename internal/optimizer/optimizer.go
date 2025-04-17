@@ -20,7 +20,7 @@ func NewOptimizer(rawConfig json.RawMessage) (Optimizer, error) {
 	}
 
 	if err := json.Unmarshal(rawConfig, &cfg); err != nil {
-		return nil, fmt.Errorf("Unable to parse optimizer config: %v", err)
+		return nil, fmt.Errorf("unable to parse optimizer config: %v", err)
 	}
 
 	switch cfg.Type {
@@ -31,6 +31,6 @@ func NewOptimizer(rawConfig json.RawMessage) (Optimizer, error) {
 	case "test":
 		return NewTestOptimizer(rawConfig)
 	default:
-		return nil, fmt.Errorf("Invalid/unsupported optimizer type: %s", cfg.Type)
+		return nil, fmt.Errorf("invalid/unsupported optimizer type: %s", cfg.Type)
 	}
 }

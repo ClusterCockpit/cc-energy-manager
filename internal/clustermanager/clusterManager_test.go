@@ -5,22 +5,22 @@
 package clustermanager
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
-	"encoding/json"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 )
 
 func TestNew(t *testing.T) {
 	cclog.Init("debug", false)
-	configFile := "testconfig.json"
+	configFile := "testdata/testconfig.json"
 	configBytes, err := os.ReadFile(configFile)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	config := struct{
+	config := struct {
 		Clusters json.RawMessage `json:"clusters"`
 	}{}
 	err = json.Unmarshal(configBytes, &config)
