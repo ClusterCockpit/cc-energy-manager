@@ -29,19 +29,25 @@ type gssOptimizerConfig struct {
 	} `json:"borders,omitempty"`
 }
 
+//  |<-----    h    ----->|
+//  *-------*-----*-------*
+//  a       c     d       b
+
 type gssOptimizer struct {
-	fa    float64
-	fb    float64
-	fc    float64
-	fd    float64
-	a     float64 // outer interval
-	b     float64 // outer interval
-	c     float64 // inner interval
-	d     float64 // inner interval
-	h     float64 // outer interval distance
-	tol   float64
-	mode  Mode
-	probe float64
+	fa           float64 // value at a
+	fb           float64 // value at b
+	fc           float64 // value at c
+	fd           float64 // value at d
+	a            float64 // outer interval lower point
+	b            float64 // outer interval upper point
+	c            float64 // inner interval lower point
+	d            float64 // inner interval upper point
+	h            float64 // outer interval distance
+	lowerBarrier float64 // never go below this barrier
+	upperBarrier float64 // never go above this barrier
+	tol          float64
+	mode         Mode
+	probe        float64
 }
 
 var (
@@ -128,12 +134,28 @@ func (o *gssOptimizer) DumpState(position string) {
 func (o *gssOptimizer) NarrowDown() float64 {
 	if o.fc < o.fd {
 		if o.h < o.tol { // expand toward lower: c becomes new d and a becomes new c, new probe a
+			// Before:
+			//              *-------*---*-------*
+			//              a       c   d       b
+			// After:
+			// *------------*-------*-----------*
+			// a            c       d           b
+			// |
+			// Probe
 			o.h = o.h * phi
 			o.d, o.fd, o.c, o.fc, o.a, o.fa = o.c, o.fc, o.a, nan, o.b-o.h, nan
 			o.mode = BroadenDown
 			o.probe = o.a
 			cclog.Debugf("\tSwitch to broaden down: %f", o.probe)
 		} else { // contract towards lower:  d becomes new b and c becomes new d, new probe c
+			// Before:
+			// *-------*---*-------*
+			// a       c   d       b
+			// After:
+			// *---*---*---*
+			// a   c   d   b
+			//     |
+			//     Probe
 			o.h = o.h * invphi
 			o.b, o.c, o.fc, o.d, o.fd = o.d, o.a+invphi2*o.h, nan, o.c, o.fc
 			o.probe = o.c
@@ -141,12 +163,28 @@ func (o *gssOptimizer) NarrowDown() float64 {
 		}
 	} else {
 		if o.h < o.tol { // expand toward higher: d becomes new c and b becomes new d, new probe b
+			// Before:
+			// *-------*---*-------*
+			// a       c   d       b
+			// After:
+			// *-----------*-------*-----------*
+			// a           c       d           b
+			//                                 |
+			//                                 Probe
 			o.h = o.h * phi
 			o.c, o.fc, o.d, o.fd, o.b, o.fb = o.d, o.fd, o.b, nan, o.a+o.h, nan
 			o.mode = BroadenUp
 			o.probe = o.b
 			cclog.Debugf("\tSwitch to broaden up: %f", o.probe)
-		} else { // contract towards higher:  c becomes new a and d becomes new c
+		} else { // contract towards higher:  c becomes new a and d becomes new c, new probe d
+			// Before:
+			// *-------*---*-------*
+			// a       c   d       b
+			// After:
+			//         *---*---*---*
+			//         a   c   d   b
+			//                 |
+			//                 Probe
 			o.h = o.h * invphi
 			o.a, o.c, o.fc, o.d, o.fd = o.c, o.d, o.fd, o.b-invphi2*o.h, nan
 			o.probe = o.d
@@ -157,18 +195,43 @@ func (o *gssOptimizer) NarrowDown() float64 {
 }
 
 func (o *gssOptimizer) BroadenDown() float64 {
-	if math.IsNaN(o.fc) { // treat first step separately
+	if math.IsNaN(o.fc) {
+		// in initial broaden down both fa and fc are unknown so do a second broaden down
+		// Before:
+		//              *-------*---*-------*
+		//              a       c   d       b
+		// After:
+		// *------------*-------*-----------*
+		// a            c       d           b
+		// |
+		// Probe
 		o.h = o.h * phi
 		o.d, o.fd, o.c, o.fc, o.a, o.fa = o.c, o.fc, o.a, o.fa, o.b-o.h, nan
 		o.probe = o.a
 		cclog.Debugf("\tinitial broaden down: %f", o.probe)
 	} else {
 		if o.fa < o.fc { // minimum still outside, further expand
+			// Before:
+			//              *-------*---*-------*
+			//              a       c   d       b
+			// After:
+			// *------------*-------*-----------*
+			// a            c       d           b
+			// |
+			// Probe
 			o.h = o.h * phi
 			o.d, o.fd, o.c, o.fc, o.a, o.fa = o.c, nan, o.a, o.fa, o.b-o.h, nan
 			o.probe = o.a
 			cclog.Debugf("\tbroaden down: %f", o.probe)
 		} else { // captured minimum, switch to NarrowDown downwards
+			// Before:
+			// *-------*---*-------*
+			// a       c   d       b
+			// After:
+			// *---*---*---*
+			// a   c   d   b
+			//     |
+			//     Probe
 			o.h = o.h * invphi
 			o.b, o.c, o.fc, o.d, o.fd, o.fa, o.fb = o.d, o.a+invphi2*o.h, nan, o.c, o.fc, nan, nan
 			o.mode = NarrowDown
@@ -181,22 +244,47 @@ func (o *gssOptimizer) BroadenDown() float64 {
 }
 
 func (o *gssOptimizer) BroadenUp() float64 {
-	if math.IsNaN(o.fd) { // treat first step separately
+	if math.IsNaN(o.fd) {
+		// in initial broaden up both fb and fd are unknown so do a second broaden up
+		// Before:
+		// *-------*---*-------*
+		// a       c   d       b
+		// After:
+		// *-----------*-------*-----------*
+		// a           c       d           b
+		//                                 |
+		//                                 Probe
 		o.h = o.h * phi
 		o.c, o.fc, o.d, o.fd, o.b, o.fb = o.d, o.fd, o.b, o.fb, o.a+o.h, nan
 		o.probe = o.b
 		cclog.Debugf("\tbroaden up: %f", o.probe)
 	} else {
 		if o.fb < o.fd { // minimum still outside, further expand
+			// Before:
+			// *-------*---*-------*
+			// a       c   d       b
+			// After:
+			// *-----------*-------*-----------*
+			// a           c       d           b
+			//                                 |
+			//                                 Probe
 			o.h = o.h * phi
 			o.c, o.fc, o.d, o.fd, o.b, o.fb = o.d, nan, o.b, o.fb, o.a+o.h, nan
 			o.probe = o.b
 			cclog.Debugf("\tbroaden up: %f", o.probe)
 		} else { // captured minimum, switch to NarrowDown upwards
+			// Before:
+			// *-------*---*-------*
+			// a       c   d       b
+			// After:
+			//         *---*---*---*
+			//         a   c   d   b
+			//                 |
+			//                 Probe
 			o.h = o.h * invphi
-			o.a, o.d, o.fc, o.c, o.fc, o.fa, o.fb = o.c, o.a+invphi2*o.h, nan, o.d, o.fd, nan, nan
+			o.a, o.d, o.fd, o.c, o.fc, o.fa, o.fb = o.c, o.a+invphi2*o.h, nan, o.d, o.fd, nan, nan
 			o.mode = NarrowDown
-			o.probe = o.b
+			o.probe = o.d
 			cclog.Debugf("\tSwitch to Narrow down from Broaden up: %f", o.probe)
 		}
 	}
@@ -217,17 +305,19 @@ func NewGssOptimizer(config json.RawMessage) (*gssOptimizer, error) {
 		return nil, err
 	}
 	o := gssOptimizer{
-		a:     float64(c.Borders.Lower),
-		b:     float64(c.Borders.Upper),
-		c:     nan,
-		d:     nan,
-		fa:    nan,
-		fb:    nan,
-		fc:    nan,
-		fd:    nan,
-		mode:  NarrowDown,
-		probe: nan,
-		tol:   float64(c.Tolerance),
+		a:            float64(c.Borders.Lower),
+		b:            float64(c.Borders.Upper),
+		c:            nan,
+		d:            nan,
+		lowerBarrier: float64(c.Borders.Lower),
+		upperBarrier: float64(c.Borders.Upper),
+		fa:           nan,
+		fb:           nan,
+		fc:           nan,
+		fd:           nan,
+		mode:         NarrowDown,
+		probe:        nan,
+		tol:          float64(c.Tolerance),
 	}
 
 	return &o, err
