@@ -111,6 +111,34 @@ func (o *gssOptimizer) Update(fx float64) (x float64) {
 	}
 	cclog.Debugf("Interval distance %f", o.h)
 
+	if o.b > o.upperBarrier { // we hit upper barrier, contract toward lower
+		// Before:
+		// *-------*---*-------*
+		// a       c   d       b
+		// After:
+		// *---*---*---*
+		// a   c   d   b
+		//     |
+		//     Probe
+		o.contractTowardsLower()
+		o.mode = Narrow
+		cclog.Debugf("\tHit upper barrier. Narrow down: %f", o.probe)
+		return o.probe
+	} else if o.a < o.lowerBarrier { // we hit lower barrier, contract toward higher
+		// Before:
+		// *-------*---*-------*
+		// a       c   d       b
+		// After:
+		//         *---*---*---*
+		//         a   c   d   b
+		//                 |
+		//                 Probe
+		o.contractTowardsHigher()
+		o.mode = Narrow
+		cclog.Debugf("\tHit lower barrier. Narrow up: %f", o.probe)
+		return o.probe
+	}
+
 	switch o.mode {
 	case Narrow:
 		return o.Narrow()
@@ -160,21 +188,6 @@ func (o *gssOptimizer) broadenUp(fd float64) {
 func (o *gssOptimizer) Narrow() float64 {
 	if o.fc < o.fd {
 		if o.h < o.tol { // expand toward lower: c becomes new d and a becomes new c, new probe a
-
-			if (o.b - o.h*phi) < o.lowerBarrier { // we hit lower barrier, contract toward higher
-				// Before:
-				// *-------*---*-------*
-				// a       c   d       b
-				// After:
-				//         *---*---*---*
-				//         a   c   d   b
-				//                 |
-				//                 Probe
-				o.contractTowardsHigher()
-				cclog.Debugf("\tHit lower barrier. Narrow up: %f", o.probe)
-				return o.probe
-			}
-
 			// Before:
 			//              *-------*---*-------*
 			//              a       c   d       b
@@ -199,19 +212,6 @@ func (o *gssOptimizer) Narrow() float64 {
 		}
 	} else {
 		if o.h < o.tol { // expand toward higher: d becomes new c and b becomes new d, new probe b
-			if (o.a + o.h*phi) > o.upperBarrier { // we hit upper barrier, contract toward lower
-				// Before:
-				// *-------*---*-------*
-				// a       c   d       b
-				// After:
-				// *---*---*---*
-				// a   c   d   b
-				//     |
-				//     Probe
-				o.contractTowardsLower()
-				cclog.Debugf("\tHit upper barrier. Narrow down: %f", o.probe)
-				return o.probe
-			}
 			// Before:
 			// *-------*---*-------*
 			// a       c   d       b

@@ -236,14 +236,108 @@ func TestMovingTwice(t *testing.T) {
 		}
 		fmt.Printf("it %d in: %f out: %f\n", i, in, out)
 
-		if i > 70 && (out > 238 && out < 242) {
+		if i > 70 || (out > 238 && out < 242) {
 			break
 		}
 
 		i++
 	}
 
-	// if out > 600 {
-	// 	t.Errorf("failed to calculate minimum")
-	// }
+	if i > 70 {
+		t.Errorf("failed to calculate minimum")
+	}
+}
+
+func TestLowerBarrier(t *testing.T) {
+	testconfig := `{
+       "tol": 2,
+       "borders": {
+         "lower_outer": 60,
+         "upper_outer": 600
+       }}`
+
+	cclog.Init("debug", false)
+	o, err := NewGssOptimizer(json.RawMessage(testconfig))
+	if err != nil {
+		t.Errorf("failed to init GssOptimizer: %v", err.Error())
+		return
+	}
+
+	f := func(v float64) float64 {
+		x := float64(v)
+		y := 0.8*x + 20
+
+		return y
+	}
+
+	in := 400.0
+	var out float64
+	ok := false
+
+	for !ok {
+		out, ok = o.Start(in)
+		in = f(out)
+	}
+	i := 0
+	fmt.Printf("it %d in: %f out: %f\n", i, in, out)
+	for {
+		out = o.Update(in)
+		in = f(out)
+
+		if out < 20 {
+			t.Errorf("exceed lower barrier %d: %f", i, out)
+		}
+		if i > 70 {
+			break
+		}
+
+		i++
+	}
+}
+
+func TestUpperBarrier(t *testing.T) {
+	testconfig := `{
+       "tol": 2,
+       "borders": {
+         "lower_outer": 60,
+         "upper_outer": 600
+       }}`
+
+	cclog.Init("debug", false)
+	o, err := NewGssOptimizer(json.RawMessage(testconfig))
+	if err != nil {
+		t.Errorf("failed to init GssOptimizer: %v", err.Error())
+		return
+	}
+
+	f := func(v float64) float64 {
+		x := float64(v)
+		y := -0.8*x + 600
+
+		return y
+	}
+
+	in := 400.0
+	var out float64
+	ok := false
+
+	for !ok {
+		out, ok = o.Start(in)
+		in = f(out)
+	}
+	i := 0
+	fmt.Printf("it %d in: %f out: %f\n", i, in, out)
+	for {
+		out = o.Update(in)
+		in = f(out)
+
+		if out > 810 {
+			t.Errorf("exceed upper barrier %d: %f", i, out)
+		}
+		if i > 70 {
+			break
+		}
+
+		i++
+	}
 }
