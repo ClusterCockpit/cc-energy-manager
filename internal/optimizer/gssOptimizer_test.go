@@ -6,7 +6,6 @@ package optimizer
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
@@ -23,7 +22,7 @@ func TestInit(t *testing.T) {
         "upper_outer": 890
       }}`
 
-	cclog.Init("debug", false)
+	cclog.Init("info", false)
 	_, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -39,7 +38,7 @@ func TestStart(t *testing.T) {
         "upper_outer": 600
       }}`
 
-	cclog.Init("debug", false)
+	cclog.Init("info", false)
 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -72,7 +71,7 @@ func TestOptimize(t *testing.T) {
          "upper": 600
        }}`
 
-	cclog.Init("debug", false)
+	cclog.Init("info", false)
 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -95,7 +94,7 @@ func TestOptimize(t *testing.T) {
 		in = f(out)
 	}
 	i := 0
-	fmt.Printf("it %d in: %f out: %f\n", i, in, out)
+	cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
 
 	for {
 		if i > 20 {
@@ -105,7 +104,7 @@ func TestOptimize(t *testing.T) {
 
 		out = o.Update(in)
 		in = f(out)
-		fmt.Printf("it %d in: %f out: %f\n", i, in, out)
+		cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
 
 		if out > 243 && out < 246 {
 			break
@@ -127,7 +126,7 @@ func TestMovingMinimum(t *testing.T) {
          "upper_outer": 600
        }}`
 
-	cclog.Init("debug", false)
+	cclog.Init("info", false)
 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -156,7 +155,7 @@ func TestMovingMinimum(t *testing.T) {
 		in = f(out)
 	}
 	i := 0
-	fmt.Printf("it %d in: %f out: %f\n", i, in, out)
+	cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
 
 	for {
 		if i > 40 {
@@ -170,7 +169,7 @@ func TestMovingMinimum(t *testing.T) {
 		} else {
 			in = fn(out)
 		}
-		fmt.Printf("it %d in: %f out: %f\n", i, in, out)
+		cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
 
 		if out > 364 && out < 368 {
 			break
@@ -192,7 +191,7 @@ func TestMovingTwice(t *testing.T) {
          "upper_outer": 600
        }}`
 
-	cclog.Init("debug", false)
+	cclog.Init("info", false)
 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -221,7 +220,7 @@ func TestMovingTwice(t *testing.T) {
 		in = f(out)
 	}
 	i := 0
-	fmt.Printf("it %d in: %f out: %f\n", i, in, out)
+	cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
 
 	for {
 		// if i > 60 {
@@ -237,7 +236,7 @@ func TestMovingTwice(t *testing.T) {
 		} else {
 			in = f(out)
 		}
-		fmt.Printf("it %d in: %f out: %f\n", i, in, out)
+		cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
 
 		if i > 70 || (out > 238 && out < 242) {
 			break
@@ -259,7 +258,7 @@ func TestLowerBarrier(t *testing.T) {
          "upper_outer": 600
        }}`
 
-	cclog.Init("debug", false)
+	cclog.Init("info", false)
 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -282,7 +281,7 @@ func TestLowerBarrier(t *testing.T) {
 		in = f(out)
 	}
 	i := 0
-	fmt.Printf("it %d in: %f out: %f\n", i, in, out)
+	cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
 	for {
 		out = o.Update(in)
 		in = f(out)
@@ -306,7 +305,7 @@ func TestUpperBarrier(t *testing.T) {
          "upper_outer": 600
        }}`
 
-	cclog.Init("debug", false)
+	cclog.Init("info", false)
 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -329,7 +328,7 @@ func TestUpperBarrier(t *testing.T) {
 		in = f(out)
 	}
 	i := 0
-	fmt.Printf("it %d in: %f out: %f\n", i, in, out)
+	cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
 	for {
 		out = o.Update(in)
 		in = f(out)
