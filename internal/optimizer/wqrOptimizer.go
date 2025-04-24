@@ -57,11 +57,11 @@ const (
 
 func NewWQROptimizer(config json.RawMessage) (*wqrOptimizer, error) {
 	c := struct{
-		lowerBound float64 `json:"lowerBound"`
-		upperBound float64 `json:"upperBound"`
-		winMinWidth float64 `json:"winMinWidth"`
-		winMinSamples int `json:"winMinSamples"`
-		winLimitSamples int `json:"winMaxSamples"`
+		LowerBound float64 `json:"lowerBound"`
+		UpperBound float64 `json:"upperBound"`
+		WinMinWidth float64 `json:"winMinWidth"`
+		WinMinSamples int `json:"winMinSamples"`
+		WinLimitSamples int `json:"winMaxSamples"`
 	}{}
 
 	err := json.Unmarshal(config, &c)
@@ -70,11 +70,11 @@ func NewWQROptimizer(config json.RawMessage) (*wqrOptimizer, error) {
 	}
 
 	o := wqrOptimizer{
-		lowerBound: c.lowerBound,
-		upperBound: c.upperBound,
-		winMinWidth: c.winMinWidth,
-		winMinSamples: c.winMinSamples,
-		winLimitSamples: c.winLimitSamples,
+		lowerBound: c.LowerBound,
+		upperBound: c.UpperBound,
+		winMinWidth: c.WinMinWidth,
+		winMinSamples: c.WinMinSamples,
+		winLimitSamples: c.WinLimitSamples,
 	}
 
 	if o.upperBound <= o.lowerBound {
@@ -224,8 +224,9 @@ func (o *wqrOptimizer) InsertSample(powerLimit, edp float64) int {
 		}
 		return 0
 	}
-	pos, _ := slices.BinarySearchFunc(o.samples, o.current, cmpFunc)
-	o.samples = slices.Insert(o.samples, pos, SamplePoint{PowerLimit: o.current, EDP: edp})
+
+	pos, _ := slices.BinarySearchFunc(o.samples, powerLimit, cmpFunc)
+	o.samples = slices.Insert(o.samples, pos, SamplePoint{PowerLimit: powerLimit, EDP: edp})
 	return pos
 }
 
@@ -237,13 +238,13 @@ func (o *wqrOptimizer) CleanupOldSamples(leftIndex, rightIndex int) {
 	// move back to the area, which was previously not part of our window, those should get cycled
 	// at some point as well.
 	for i := 0; i < leftIndex; i++ {
-		o.samples[i].Age = 0
+		o.samples[i].Age = max(0, o.samples[i].Age - 1)
 	}
 	for i := leftIndex; i < rightIndex; i++ {
 		o.samples[i].Age += 1
 	}
 	for i := rightIndex; i < len(o.samples); i++ {
-		o.samples[i].Age = 0
+		o.samples[i].Age = max(0, o.samples[i].Age - 1)
 	}
 
 	// Now we limit the amount of samples inside the window (between leftIndex and rightIndex) to count of winLimitSamples.
@@ -270,25 +271,26 @@ func (o *wqrOptimizer) CleanupOldSamples(leftIndex, rightIndex int) {
 }
 
 func (o *wqrOptimizer) DeleteSamplesAtIndices(leftIndex, rightIndex int, indicesToRemove []int) {
+	sort.Ints(indicesToRemove)
 	// leftIndex and rightIndex are merely an optimization so that we do not iterate over
 	// unnecessary values.
-	readIndex := leftIndex
-	writeIndex := leftIndex
-	indexIndex := 0
-	for readIndex < rightIndex {
-		if indexIndex >= len(indicesToRemove) {
-			break
-		}
+	leftSamples := o.samples[0:leftIndex]
+	windowSamples := o.samples[leftIndex:rightIndex]
+	rightSamples := o.samples[rightIndex:len(o.samples)]
 
-		if readIndex == indicesToRemove[indexIndex] {
+	indexIndex := 0
+	writeIndex := 0
+	for readIndex := 0; readIndex < len(windowSamples); readIndex++ {
+		if indexIndex < len(indicesToRemove) && leftIndex + readIndex == indicesToRemove[indexIndex] {
 			indexIndex += 1
 		} else {
 			o.samples[writeIndex] = o.samples[readIndex]
 			writeIndex += 1
 		}
-		readIndex += 1
 	}
-	o.samples = o.samples[0:writeIndex]
+
+	o.samples = append(leftSamples, windowSamples[0:writeIndex]...)
+	o.samples = append(o.samples, rightSamples...)
 }
 
 // Do we still need this?
