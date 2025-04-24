@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"sort"
 	"slices"
+	"sort"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	"github.com/openacid/slimarray/polyfit"
@@ -34,19 +34,19 @@ import (
 
 type SamplePoint struct {
 	PowerLimit float64
-	EDP float64
-	Age int
+	EDP        float64
+	Age        int
 }
 
 type wqrOptimizer struct {
-	lowerBound       float64
-	upperBound       float64
-	winMinWidth      float64
-	winMinSamples    int
-	winLimitSamples  int
-	samples          []SamplePoint
-	current          float64
-	startupState     int
+	lowerBound      float64
+	upperBound      float64
+	winMinWidth     float64
+	winMinSamples   int
+	winLimitSamples int
+	samples         []SamplePoint
+	current         float64
+	startupState    int
 }
 
 const (
@@ -56,12 +56,12 @@ const (
 )
 
 func NewWQROptimizer(config json.RawMessage) (*wqrOptimizer, error) {
-	c := struct{
-		LowerBound float64 `json:"lowerBound"`
-		UpperBound float64 `json:"upperBound"`
-		WinMinWidth float64 `json:"winMinWidth"`
-		WinMinSamples int `json:"winMinSamples"`
-		WinLimitSamples int `json:"winMaxSamples"`
+	c := struct {
+		LowerBound      float64 `json:"lowerBound"`
+		UpperBound      float64 `json:"upperBound"`
+		WinMinWidth     float64 `json:"winMinWidth"`
+		WinMinSamples   int     `json:"winMinSamples"`
+		WinLimitSamples int     `json:"winMaxSamples"`
 	}{}
 
 	err := json.Unmarshal(config, &c)
@@ -70,10 +70,10 @@ func NewWQROptimizer(config json.RawMessage) (*wqrOptimizer, error) {
 	}
 
 	o := wqrOptimizer{
-		lowerBound: c.LowerBound,
-		upperBound: c.UpperBound,
-		winMinWidth: c.WinMinWidth,
-		winMinSamples: c.WinMinSamples,
+		lowerBound:      c.LowerBound,
+		upperBound:      c.UpperBound,
+		winMinWidth:     c.WinMinWidth,
+		winMinSamples:   c.WinMinSamples,
 		winLimitSamples: c.WinLimitSamples,
 	}
 
@@ -112,7 +112,7 @@ func (o *wqrOptimizer) Start(edp float64) (float64, bool) {
 		return o.upperBound, false
 	} else if o.startupState == STARTUP_MID {
 		o.InsertSample(o.current, edp)
-		o.current = o.lowerBound + 0.5 * (o.upperBound - o.lowerBound)
+		o.current = o.lowerBound + 0.5*(o.upperBound-o.lowerBound)
 		return o.current, true
 	}
 
@@ -135,8 +135,8 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 		winLeftPowerLimit = o.samples[winLeftIndex].PowerLimit
 		winRightPowerLimit = o.samples[winRightIndex-1].PowerLimit
 
-		enoughSamples := winRightIndex - winLeftIndex >= o.winMinSamples
-		enoughWidth := winLeftPowerLimit - winRightPowerLimit >= o.winMinWidth
+		enoughSamples := winRightIndex-winLeftIndex >= o.winMinSamples
+		enoughWidth := winLeftPowerLimit-winRightPowerLimit >= o.winMinWidth
 
 		if enoughSamples && enoughWidth {
 			break
@@ -154,7 +154,7 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 			winLeftIndex -= 1
 		} else {
 			// Search into the closest direction
-			distanceLeft := o.current - o.samples[winLeftIndex - 1].PowerLimit
+			distanceLeft := o.current - o.samples[winLeftIndex-1].PowerLimit
 			distanceRight := o.samples[winRightIndex].PowerLimit - o.current
 			if distanceLeft < distanceRight {
 				winLeftIndex -= 1
@@ -164,12 +164,12 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 		}
 	}
 
-	x := make([]float64, winRightIndex - winLeftIndex)
-	y := make([]float64, winRightIndex - winLeftIndex)
+	x := make([]float64, winRightIndex-winLeftIndex)
+	y := make([]float64, winRightIndex-winLeftIndex)
 
 	for i := 0; i < len(x); i++ {
-		x[i] = o.samples[winLeftIndex + i].PowerLimit
-		y[i] = o.samples[winLeftIndex + i].EDP
+		x[i] = o.samples[winLeftIndex+i].PowerLimit
+		y[i] = o.samples[winLeftIndex+i].EDP
 	}
 
 	coefficients := polyfit.NewFit(x, y, 2).Solve()
@@ -184,11 +184,11 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 		// If a is negative, we can't search a minimum. Instead, we use the slope 'b'
 		// to determine in which direction to search.
 		randomize := 0.2
-		if (b > 0.0) {
-			o.current = o.current - 0.5 * (o.current - winLeftPowerLimit)
+		if b > 0.0 {
+			o.current = o.current - 0.5*(o.current-winLeftPowerLimit)
 			randomize = 0.05
-		} else if (b < 0.0) {
-			o.current = o.current - 0.5 * (o.current - winLeftPowerLimit)
+		} else if b < 0.0 {
+			o.current = o.current - 0.5*(o.current-winLeftPowerLimit)
 			randomize = 0.05
 		}
 		o.current += rand.Float64() * randomize * (o.upperBound - o.lowerBound)
@@ -203,10 +203,10 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 		// borders.
 		o.current = -b / (2.0 * a)
 		if o.current < o.lowerBound {
-			o.current = max(o.current, o.lowerBound) + 0.02 * rand.Float64() * (o.upperBound - o.lowerBound)
+			o.current = max(o.current, o.lowerBound) + 0.02*rand.Float64()*(o.upperBound-o.lowerBound)
 		}
 		if o.current > o.upperBound {
-			o.current = min(o.current, o.upperBound) - 0.02 * rand.Float64() * (o.upperBound - o.lowerBound)
+			o.current = min(o.current, o.upperBound) - 0.02*rand.Float64()*(o.upperBound-o.lowerBound)
 		}
 	}
 
@@ -238,18 +238,18 @@ func (o *wqrOptimizer) CleanupOldSamples(leftIndex, rightIndex int) {
 	// move back to the area, which was previously not part of our window, those should get cycled
 	// at some point as well.
 	for i := 0; i < leftIndex; i++ {
-		o.samples[i].Age = max(0, o.samples[i].Age - 1)
+		o.samples[i].Age = max(0, o.samples[i].Age-1)
 	}
 	for i := leftIndex; i < rightIndex; i++ {
 		o.samples[i].Age += 1
 	}
 	for i := rightIndex; i < len(o.samples); i++ {
-		o.samples[i].Age = max(0, o.samples[i].Age - 1)
+		o.samples[i].Age = max(0, o.samples[i].Age-1)
 	}
 
 	// Now we limit the amount of samples inside the window (between leftIndex and rightIndex) to count of winLimitSamples.
 	// We prioritize removal of the oldest values.
-	indicesToRemove := make([]int, rightIndex - leftIndex)
+	indicesToRemove := make([]int, rightIndex-leftIndex)
 	if len(indicesToRemove) >= o.winLimitSamples {
 		for i := 0; i < len(indicesToRemove); i++ {
 			indicesToRemove[i] = i + leftIndex
@@ -281,7 +281,7 @@ func (o *wqrOptimizer) DeleteSamplesAtIndices(leftIndex, rightIndex int, indices
 	indexIndex := 0
 	writeIndex := 0
 	for readIndex := 0; readIndex < len(windowSamples); readIndex++ {
-		if indexIndex < len(indicesToRemove) && leftIndex + readIndex == indicesToRemove[indexIndex] {
+		if indexIndex < len(indicesToRemove) && leftIndex+readIndex == indicesToRemove[indexIndex] {
 			indexIndex += 1
 		} else {
 			o.samples[writeIndex] = o.samples[readIndex]

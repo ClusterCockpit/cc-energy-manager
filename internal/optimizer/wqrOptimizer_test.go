@@ -64,7 +64,7 @@ func TestWQRCleanupOldSamples(t *testing.T) {
 	totalSamples := 50
 	for i := 0; i < totalSamples; i++ {
 		edp := float64(i)
-		power := o.lowerBound + float64(i) / float64(totalSamples - 1) * (o.upperBound - o.lowerBound)
+		power := o.lowerBound + float64(i)/float64(totalSamples-1)*(o.upperBound-o.lowerBound)
 		o.InsertSample(power, edp)
 	}
 
