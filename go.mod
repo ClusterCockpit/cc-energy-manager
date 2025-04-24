@@ -7,6 +7,7 @@ toolchain go1.24.0
 require (
 	github.com/ClusterCockpit/cc-lib v0.2.0
 	github.com/ClusterCockpit/cc-node-controller v0.0.0-20250328152327-c64fc460fdd2
+	github.com/openacid/slimarray v0.1.3
 )
 
 require (
@@ -26,7 +27,6 @@ require (
 	github.com/nats-io/nkeys v0.4.11 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/oapi-codegen/runtime v1.1.1 // indirect
-	github.com/openacid/slimarray v0.1.3 // indirect
 	github.com/prometheus/client_golang v1.22.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.63.0 // indirect
