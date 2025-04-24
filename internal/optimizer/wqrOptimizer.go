@@ -292,20 +292,3 @@ func (o *wqrOptimizer) DeleteSamplesAtIndices(leftIndex, rightIndex int, indices
 	o.samples = append(leftSamples, windowSamples[0:writeIndex]...)
 	o.samples = append(o.samples, rightSamples...)
 }
-
-// Do we still need this?
-//func (o *wqrOptimizer) SegmentOfPowerLimit(powerLimit float64) int {
-//	width := o.upperBound - o.lowerBound
-//	widthPerSegment := width / float64(len(o.segments))
-//	return min((powerLimit - o.lowerBound) / widthPerSegment, len(o.segments) - 1)
-//}
-//
-//func (o *wqrOptimizer) BoundsOfSegment(segment int) (float64, float64) {
-//	width := o.upperBound - o.lowerBound
-//	widthPerSegment := width / float64(len(o.segments))
-//
-//	lowerBounds := segment * widthPerSegment
-//	upperBounds := (segment + 1) * widthPerSegment
-//
-//	return lowerBounds, upperBounds
-//}
