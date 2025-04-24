@@ -26,6 +26,7 @@ require (
 	github.com/nats-io/nkeys v0.4.11 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/oapi-codegen/runtime v1.1.1 // indirect
+	github.com/openacid/slimarray v0.1.3 // indirect
 	github.com/prometheus/client_golang v1.22.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.63.0 // indirect
@@ -36,5 +37,6 @@ require (
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
+	gonum.org/v1/gonum v0.8.1 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 )

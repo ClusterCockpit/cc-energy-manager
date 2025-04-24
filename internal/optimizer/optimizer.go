@@ -30,6 +30,8 @@ func NewOptimizer(rawConfig json.RawMessage) (Optimizer, error) {
 		return NewTraceOptimizer(rawConfig)
 	case "test":
 		return NewTestOptimizer(rawConfig)
+	case "wqr":
+		return NewWQROptimizer(rawConfig)
 	default:
 		return nil, fmt.Errorf("invalid/unsupported optimizer type: %s", cfg.Type)
 	}
