@@ -91,7 +91,7 @@ func (o *gssOptimizer) Start(fx float64) (x float64, ok bool) {
 }
 
 func (o *gssOptimizer) IsConverged() bool {
-	return o.h < 4*o.tol
+	return o.h < 2*o.tol
 }
 
 func (o *gssOptimizer) Update(fx float64) (x float64) {
@@ -111,31 +111,35 @@ func (o *gssOptimizer) Update(fx float64) (x float64) {
 	}
 	cclog.Debugf("Interval distance %f", o.h)
 
-	if o.b > o.upperBarrier { // we hit upper barrier, contract toward lower
+	if o.b > o.upperBarrier { // we hit upper barrier, broaden toward lower
 		// Before:
 		// *-------*---*-------*
 		// a       c   d       b
+		//         -   -       -
 		// After:
-		// *---*---*---*
-		// a   c   d   b
-		//     |
-		//     Probe
-		o.contractTowardsLower()
-		o.mode = Narrow
-		cclog.Debugf("\tHit upper barrier. Narrow down: %f", o.probe)
+		// *-------*---*-------*
+		// a       c   d       b
+		// -       -   -       -
+		// |
+		// Probe
+		o.probe = o.a
+		o.mode = BroadenDown
+		cclog.Debugf("\tHit upper barrier. Broaden down: %f", o.probe)
 		return o.probe
-	} else if o.a < o.lowerBarrier { // we hit lower barrier, contract toward higher
+	} else if o.a < o.lowerBarrier { // we hit lower barrier, broaden toward higher
 		// Before:
 		// *-------*---*-------*
 		// a       c   d       b
+		// -       -   -
 		// After:
-		//         *---*---*---*
-		//         a   c   d   b
-		//                 |
-		//                 Probe
-		o.contractTowardsHigher()
-		o.mode = Narrow
-		cclog.Debugf("\tHit lower barrier. Narrow up: %f", o.probe)
+		// *-------*---*-------*
+		// a       c   d       b
+		// -       -   -       -
+		//                     |
+		//                     Probe
+		o.probe = o.b
+		o.mode = BroadenUp
+		cclog.Debugf("\tHit lower barrier. Broaden up: %f", o.probe)
 		return o.probe
 	}
 
@@ -153,10 +157,10 @@ func (o *gssOptimizer) Update(fx float64) (x float64) {
 
 func (o *gssOptimizer) DumpState(position string) {
 	cclog.Debugf("State at %s", position)
-	cclog.Debugf("\tfa: %f", o.fa)
-	cclog.Debugf("\tfc: %f", o.fc)
-	cclog.Debugf("\tfd: %f", o.fd)
-	cclog.Debugf("\tfb: %f", o.fb)
+	cclog.Debugf("\tfa(%f): %f", o.a, o.fa)
+	cclog.Debugf("\tfc(%f): %f", o.c, o.fc)
+	cclog.Debugf("\tfd(%f): %f", o.d, o.fd)
+	cclog.Debugf("\tfb(%f): %f", o.b, o.fb)
 }
 
 func (o *gssOptimizer) contractTowardsHigher() {
@@ -173,15 +177,15 @@ func (o *gssOptimizer) contractTowardsLower() {
 	cclog.Debugf("\tsearch lower: try next %f", o.probe)
 }
 
-func (o *gssOptimizer) broadenDown(fc float64) {
+func (o *gssOptimizer) broadenDown() {
 	o.h = o.h * phi
-	o.d, o.fd, o.c, o.fc, o.a, o.fa = o.c, nan, o.a, fc, o.b-o.h, nan
+	o.d, o.fd, o.c, o.fc, o.a, o.fa = o.c, o.fc, o.a, o.fa, o.b-o.h, nan
 	o.probe = o.a
 }
 
-func (o *gssOptimizer) broadenUp(fd float64) {
+func (o *gssOptimizer) broadenUp() {
 	o.h = o.h * phi
-	o.c, o.fc, o.d, o.fd, o.b, o.fb = o.d, nan, o.b, fd, o.a+o.h, nan
+	o.c, o.fc, o.d, o.fd, o.b, o.fb = o.d, o.fd, o.b, o.fb, o.a+o.h, nan
 	o.probe = o.b
 }
 
@@ -189,14 +193,17 @@ func (o *gssOptimizer) Narrow() float64 {
 	if o.fc < o.fd {
 		if o.h < o.tol { // expand toward lower: c becomes new d and a becomes new c, new probe a
 			// Before:
-			//              *-------*---*-------*
-			//              a       c   d       b
+			// *------------*-------*-----------*
+			// a            c       d           b
+			//              -       -
 			// After:
 			// *------------*-------*-----------*
 			// a            c       d           b
+			// -            -       -
 			// |
 			// Probe
-			o.broadenDown(nan)
+			o.fc = nan
+			o.probe = o.a
 			o.mode = BroadenDown
 			cclog.Debugf("\tSwitch to broaden down: %f", o.probe)
 		} else { // contract towards lower:  d becomes new b and c becomes new d, new probe c
@@ -211,16 +218,20 @@ func (o *gssOptimizer) Narrow() float64 {
 			o.contractTowardsLower()
 		}
 	} else {
-		if o.h < o.tol { // expand toward higher: d becomes new c and b becomes new d, new probe b
+		if o.h < o.tol { // expand toward higher: all points stay the same, new probe b
+			// Set fd to nan to not get stuck with old function value
 			// Before:
-			// *-------*---*-------*
-			// a       c   d       b
+			// *-----------*-------*-----------*
+			// a           c       d           b
+			//             -       -
 			// After:
 			// *-----------*-------*-----------*
 			// a           c       d           b
+			//             -                   -
 			//                                 |
 			//                                 Probe
-			o.broadenUp(nan)
+			o.fd = nan
+			o.probe = o.b
 			o.mode = BroadenUp
 			cclog.Debugf("\tSwitch to broaden up: %f", o.probe)
 		} else { // contract towards higher:  c becomes new a and d becomes new c, new probe d
@@ -240,42 +251,38 @@ func (o *gssOptimizer) Narrow() float64 {
 
 func (o *gssOptimizer) BroadenDown() float64 {
 	if math.IsNaN(o.fc) {
-		// in initial broaden down both fa and fc are unknown so do a second broaden down
+		o.broadenDown()
+		cclog.Debugf("\t follow up broaden down: %f", o.probe)
+		return o.probe
+	}
+
+	if o.fa < o.fc { // minimum still outside, further expand
 		// Before:
 		//              *-------*---*-------*
 		//              a       c   d       b
+		//              -       -
 		// After:
 		// *------------*-------*-----------*
 		// a            c       d           b
+		// -            -       -
 		// |
 		// Probe
-		o.broadenDown(o.fa)
-		cclog.Debugf("\tinitial broaden down: %f", o.probe)
-	} else {
-		if o.fa < o.fc { // minimum still outside, further expand
-			// Before:
-			//              *-------*---*-------*
-			//              a       c   d       b
-			// After:
-			// *------------*-------*-----------*
-			// a            c       d           b
-			// |
-			// Probe
-			o.broadenDown(o.fa)
-			cclog.Debugf("\tbroaden down: %f", o.probe)
-		} else { // captured minimum, switch to Narrow downwards
-			// Before:
-			// *-------*---*-------*
-			// a       c   d       b
-			// After:
-			// *---*---*---*
-			// a   c   d   b
-			//     |
-			//     Probe
-			o.contractTowardsLower()
-			o.mode = Narrow
-			cclog.Debugf("\tSwitch to Narrow from Broaden down: %f", o.probe)
-		}
+		o.broadenDown()
+		cclog.Debugf("\tbroaden down: %f", o.probe)
+	} else { // captured minimum, switch to Narrow downwards
+		// Before:
+		// *-------*---*-------*
+		// a       c   d       b
+		// -       -   -
+		// After:
+		// *---*---*---*
+		// a   c   d   b
+		// -   -   -   -
+		//     |
+		//     Probe
+		o.contractTowardsLower()
+		o.mode = Narrow
+		cclog.Debugf("\tSwitch to Narrow from Broaden down: %f", o.probe)
 	}
 
 	return o.probe
@@ -283,42 +290,38 @@ func (o *gssOptimizer) BroadenDown() float64 {
 
 func (o *gssOptimizer) BroadenUp() float64 {
 	if math.IsNaN(o.fd) {
-		// in initial broaden up both fb and fd are unknown so do a second broaden up
+		o.broadenUp()
+		cclog.Debugf("\t follow up broaden up: %f", o.probe)
+		return o.probe
+	}
+
+	if o.fb < o.fd { // minimum still outside, further expand
 		// Before:
 		// *-------*---*-------*
 		// a       c   d       b
+		//             -       -
 		// After:
 		// *-----------*-------*-----------*
 		// a           c       d           b
+		//             -       -           -
 		//                                 |
 		//                                 Probe
-		o.broadenUp(o.fb)
+		o.broadenUp()
 		cclog.Debugf("\tbroaden up: %f", o.probe)
-	} else {
-		if o.fb < o.fd { // minimum still outside, further expand
-			// Before:
-			// *-------*---*-------*
-			// a       c   d       b
-			// After:
-			// *-----------*-------*-----------*
-			// a           c       d           b
-			//                                 |
-			//                                 Probe
-			o.broadenUp(o.fb)
-			cclog.Debugf("\tbroaden up: %f", o.probe)
-		} else { // captured minimum, switch to Narrow upwards
-			// Before:
-			// *-------*---*-------*
-			// a       c   d       b
-			// After:
-			//         *---*---*---*
-			//         a   c   d   b
-			//                 |
-			//                 Probe
-			o.contractTowardsHigher()
-			o.mode = Narrow
-			cclog.Debugf("\tSwitch to Narrow from Broaden up: %f", o.probe)
-		}
+	} else { // captured minimum, switch to Narrow upwards
+		// Before:
+		// *-------*---*-------*
+		// a       c   d       b
+		//         -   -       -
+		// After:
+		//         *---*---*---*
+		//         a   c   d   b
+		//         -   -   -   -
+		//                 |
+		//                 Probe
+		o.contractTowardsHigher()
+		o.mode = Narrow
+		cclog.Debugf("\tSwitch to Narrow from Broaden up: %f", o.probe)
 	}
 
 	return o.probe

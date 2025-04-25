@@ -11,6 +11,8 @@ import (
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 )
 
+const loglevel = "info"
+
 // TODO:
 // Implement test with noisy and flat function
 
@@ -18,11 +20,11 @@ func TestInit(t *testing.T) {
 	testconfig := `{
       "tol": 10,
       "borders": {
-        "lower_outer": 123,
-        "upper_outer": 890
+        "lower": 123,
+        "upper": 890
       }}`
 
-	cclog.Init("info", false)
+	cclog.Init(loglevel, false)
 	_, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -32,13 +34,13 @@ func TestInit(t *testing.T) {
 
 func TestStart(t *testing.T) {
 	testconfig := `{
-      "tol": 10,
+      "tolerance": 10,
       "borders": {
-        "lower_outer": 60,
-        "upper_outer": 600
+        "lower": 60,
+        "upper": 600
       }}`
 
-	cclog.Init("info", false)
+	cclog.Init(loglevel, false)
 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -65,13 +67,13 @@ func TestStart(t *testing.T) {
 
 func TestOptimize(t *testing.T) {
 	testconfig := `{
-       "tol": 2,
+       "tolerance": 2,
        "borders": {
          "lower": 60,
          "upper": 600
        }}`
 
-	cclog.Init("info", false)
+	cclog.Init(loglevel, false)
 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -106,27 +108,27 @@ func TestOptimize(t *testing.T) {
 		in = f(out)
 		cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
 
-		if out > 243 && out < 246 {
+		if o.IsConverged() {
 			break
 		}
 
 		i++
 	}
 
-	// if out > 100 {
-	// 	t.Errorf("failed to calculate minimum")
-	// }
+	if out < 241 || out > 244 {
+		t.Errorf("failed to calculate minimum: %f", out)
+	}
 }
 
 func TestMovingMinimum(t *testing.T) {
 	testconfig := `{
-       "tol": 2,
-       "borders": {
-         "lower_outer": 60,
-         "upper_outer": 600
-       }}`
+        "tolerance": 2,
+        "borders": {
+          "lower": 60,
+          "upper": 600
+        }}`
 
-	cclog.Init("info", false)
+	cclog.Init(loglevel, false)
 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -171,27 +173,27 @@ func TestMovingMinimum(t *testing.T) {
 		}
 		cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
 
-		if out > 364 && out < 368 {
+		if out > 360 && out < 363 && o.IsConverged() {
 			break
 		}
 
 		i++
 	}
 
-	// if out > 100 {
-	// 	t.Errorf("failed to calculate minimum")
-	// }
+	if out < 361 && out > 365 {
+		t.Errorf("failed to calculate minimum: %f", out)
+	}
 }
 
 func TestMovingTwice(t *testing.T) {
 	testconfig := `{
-       "tol": 2,
-       "borders": {
-         "lower_outer": 60,
-         "upper_outer": 600
-       }}`
+        "tolerance": 2,
+        "borders": {
+          "lower": 60,
+          "upper": 600
+        }}`
 
-	cclog.Init("info", false)
+	cclog.Init(loglevel, false)
 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -223,10 +225,10 @@ func TestMovingTwice(t *testing.T) {
 	cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
 
 	for {
-		// if i > 60 {
-		// 	t.Errorf("failed to find minimum")
-		// 	return
-		// }
+		if i > 80 {
+			t.Errorf("failed to find minimum")
+			return
+		}
 
 		out = o.Update(in)
 		if i < 12 {
@@ -238,27 +240,27 @@ func TestMovingTwice(t *testing.T) {
 		}
 		cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
 
-		if i > 70 || (out > 238 && out < 242) {
+		if i > 70 && (out > 238 && out < 242) && o.IsConverged() {
 			break
 		}
 
 		i++
 	}
 
-	if i > 70 {
+	if out < 238 && out > 242 {
 		t.Errorf("failed to calculate minimum")
 	}
 }
 
 func TestLowerBarrier(t *testing.T) {
 	testconfig := `{
-       "tol": 2,
+       "tolerance": 2,
        "borders": {
-         "lower_outer": 60,
-         "upper_outer": 600
+         "lower": 60,
+         "upper": 600
        }}`
 
-	cclog.Init("info", false)
+	cclog.Init(loglevel, false)
 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
@@ -286,7 +288,7 @@ func TestLowerBarrier(t *testing.T) {
 		out = o.Update(in)
 		in = f(out)
 
-		if out < 20 {
+		if out < 55 {
 			t.Errorf("exceed lower barrier %d: %f", i, out)
 		}
 		if i > 70 {
@@ -299,13 +301,13 @@ func TestLowerBarrier(t *testing.T) {
 
 func TestUpperBarrier(t *testing.T) {
 	testconfig := `{
-       "tol": 2,
-       "borders": {
-         "lower_outer": 60,
-         "upper_outer": 600
-       }}`
+        "tol": 2,
+        "borders": {
+          "lower": 60,
+          "upper": 600
+        }}`
 
-	cclog.Init("info", false)
+	cclog.Init(loglevel, false)
 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
 	if err != nil {
 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
