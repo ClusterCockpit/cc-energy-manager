@@ -94,14 +94,15 @@ func (o *gssOptimizer) IsConverged() bool {
 	return o.h < 2*o.tol
 }
 
-func (o *gssOptimizer) Update(fx float64) (x float64) {
+func (o *gssOptimizer) Update(fx float64) float64 {
+	offset := fx * 0.05
 	switch {
 	case o.c == o.probe:
 		cclog.Debugf("Set fc to %f", fx)
 		o.fc = fx
 	case o.d == o.probe:
 		cclog.Debugf("Set fd to %f", fx)
-		o.fd = fx
+		o.fd = fx - offset
 	case o.a == o.probe:
 		cclog.Debugf("Set fa to %f", fx)
 		o.fa = fx
@@ -192,6 +193,7 @@ func (o *gssOptimizer) broadenUp() {
 func (o *gssOptimizer) Narrow() float64 {
 	if o.fc < o.fd {
 		if o.h < o.tol { // expand toward lower: c becomes new d and a becomes new c, new probe a
+			// Set fc to nan to not get stuck with old function value
 			// Before:
 			// *------------*-------*-----------*
 			// a            c       d           b
@@ -252,7 +254,7 @@ func (o *gssOptimizer) Narrow() float64 {
 func (o *gssOptimizer) BroadenDown() float64 {
 	if math.IsNaN(o.fc) {
 		o.broadenDown()
-		cclog.Debugf("\t follow up broaden down: %f", o.probe)
+		cclog.Debugf("\t initial broaden down: %f", o.probe)
 		return o.probe
 	}
 
@@ -291,7 +293,7 @@ func (o *gssOptimizer) BroadenDown() float64 {
 func (o *gssOptimizer) BroadenUp() float64 {
 	if math.IsNaN(o.fd) {
 		o.broadenUp()
-		cclog.Debugf("\t follow up broaden up: %f", o.probe)
+		cclog.Debugf("\t initial broaden up: %f", o.probe)
 		return o.probe
 	}
 
