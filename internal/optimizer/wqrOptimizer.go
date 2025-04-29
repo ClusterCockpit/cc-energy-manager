@@ -16,21 +16,25 @@ import (
 )
 
 // TODO rewrite this text
-// This optimizer optimizes power limits based on piecewise 'linear regression'.
+// This optimizer optimizes power limits based on windowed quadratic regression.
 // Optimizing means finding the lowest power usage per instruction rate.
 // We try to circumvent the following problems, which other optimizer may face:
 // - Noise immunity
-// - Prevent valleying at local minima
 // - Prevent unnecessary drift from optimum during normal operation
+// - No oscillation
 //
 // The concept of operation is the following:
-// The range of possible power limits is split up into N segments, which will be later
-// regressed linearly, in order to determine in which direction the more efficient
-// point of operation is. Should the optimizer encounter a local minimum between two
-// segments, this is likely the optimum we are looking for.
-//
-// Though, if unlucky, we might find a local minimum, which is not the global minimum.
-// Due to this, we do an initial global scan to create a rough ... TODO
+// A quadratic regression of the function powerlimit -> edp is calculated.
+// Based on that, we find the minimum of this regression. As we obtain more and more
+// measurements, the regression will become more accurate.
+// Because the true underlying function is not really a positive quadratic function,
+// we limit the 'window' in which this quadratic regression operates on.
+// This also means that the true minimum may be outside of the window. Should that
+// be the case, we simply pretend the minimum is at the respective window border.
+// During the next few iterations (with the window moving with the last detected minimum)
+// we should hopefully move the window in such a way, that it does cover the area of the
+// true minimum. If the window size is choosen okayish, the quadratic minimum in this window
+// should be fairly accurate.
 
 type SamplePoint struct {
 	PowerLimit float64
@@ -201,6 +205,9 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 		// If the result is outside of the bounds, limit it to the bounds.
 		// In that case, apply a random bounce effect. Hopefully this avoids deadlocks are the
 		// borders.
+
+		// TODO we might want to add a smoothing factor here, in order to reduce oscillation
+		// at the true minimum.
 		o.current = -b / (2.0 * a)
 		if o.current < o.lowerBound {
 			o.current = max(o.current, o.lowerBound) + 0.02*rand.Float64()*(o.upperBound-o.lowerBound)
