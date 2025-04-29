@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"slices"
 	"sort"
+	"math"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	"github.com/openacid/slimarray/polyfit"
@@ -194,7 +195,12 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 
 	// If 'a' is positive, our regressed quadratic function has a global minimum.
 	// If 'a' is negative, our regressed quadratic function has a global maximum.
-	if a <= 0.0 {
+	if math.IsNaN(a) || math.IsInf(a, 0) || math.IsNaN(b) || math.IsInf(b, 0) {
+		// Not sure if the polyfit library is supposed to do that, but it does.
+		// I assume this may occur due to numerical instability. Just move around
+		// randomly a bit in this case.
+		o.current += o.rand.Float64() * 0.1 * (o.upperBound - o.lowerBound)
+	} else if a <= 0.0 {
 		// If a is negative, we can't search a minimum. Instead, we use the slope 'b'
 		// to determine in which direction to search.
 		randomize := 0.2
@@ -206,8 +212,6 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 			randomize = 0.05
 		}
 		o.current += o.rand.Float64() * randomize * (o.upperBound - o.lowerBound)
-		o.current = min(o.current, o.upperBound)
-		o.current = max(o.current, o.lowerBound)
 	} else {
 		// for positive 'a', the minimum of ax^2 + bx + c is the following:
 		// min(ax^2 + bx + c) = solve(2ax + b == 0)
@@ -219,13 +223,22 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 		// TODO we might want to add a smoothing factor here, in order to reduce oscillation
 		// at the true minimum.
 		o.current = -b / (2.0 * a)
-		if o.current < o.lowerBound {
-			o.current = max(o.current, o.lowerBound) + 0.02*rand.Float64()*(o.upperBound-o.lowerBound)
-		}
-		if o.current > o.upperBound {
-			o.current = min(o.current, o.upperBound) - 0.02*rand.Float64()*(o.upperBound-o.lowerBound)
-		}
 	}
+
+	if o.current < o.lowerBound {
+		o.current = max(o.current, o.lowerBound) + 0.05*o.rand.Float64()*(o.upperBound-o.lowerBound)
+	}
+	if o.current > o.upperBound {
+		o.current = min(o.current, o.upperBound) - 0.05*o.rand.Float64()*(o.upperBound-o.lowerBound)
+	}
+
+	//nx := fmt.Sprintf("%f", o.samples[winLeftIndex].PowerLimit)
+	//ny := fmt.Sprintf("%f", o.samples[winLeftIndex].EDP)
+	//for i := winLeftIndex + 1; i < winRightIndex; i++ {
+	//	nx = fmt.Sprintf("%s,%f", nx, o.samples[i].PowerLimit)
+	//	ny = fmt.Sprintf("%s,%f", ny, o.samples[i].EDP)
+	//}
+	//fmt.Printf("%.12f;%.12f;%.12f;%f;%f;%f;%d;%s;%s\n", a, b, c, winLeftPowerLimit, winRightPowerLimit, o.current, winRightIndex - winLeftIndex, nx, ny)
 
 	o.CleanupOldSamples(winLeftIndex, winRightIndex)
 	return o.current
