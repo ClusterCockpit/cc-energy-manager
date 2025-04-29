@@ -106,7 +106,7 @@ func (t Target) String() string {
 // All target scopes are calculated, regardless of the actual scope used.
 // The upper scopes are calculated by averaging the values. Perhaps we should make
 // this configurable.
-func DevicePdpToTargetPdp(pdpMap map[string]map[string]float64) map[Target]float64 {
+func DevicePdpToTargetPdp(pdpMap map[string]map[string]float64, useMax bool) map[Target]float64 {
 	jobPdp := 0.0
 	jobNumDevices := 0
 
@@ -117,23 +117,35 @@ func DevicePdpToTargetPdp(pdpMap map[string]map[string]float64) map[Target]float
 		hostNumDevices := 0
 
 		for deviceId, pdp := range deviceIdToPdp {
-			hostPdp += pdp
+			if useMax {
+				hostPdp = max(hostPdp, pdp)
+			} else {
+				hostPdp += pdp
+			}
 			hostNumDevices++
 
 			targetPdp[DeviceScopeTarget(hostname, deviceId)] = pdp
 		}
 
-		jobPdp += hostPdp
+		if useMax {
+			jobPdp = max(jobPdp, hostPdp)
+		} else {
+			jobPdp += hostPdp
+		}
 		jobNumDevices += hostNumDevices
 
 		if hostNumDevices > 0 {
-			hostPdp /= float64(hostNumDevices)
+			if !useMax {
+				hostPdp /= float64(hostNumDevices)
+			}
 			targetPdp[NodeScopeTarget(hostname)] = hostPdp
 		}
 	}
 
 	if jobNumDevices > 0 {
-		jobPdp /= float64(jobNumDevices)
+		if !useMax {
+			jobPdp /= float64(jobNumDevices)
+		}
 		targetPdp[JobScopeTarget()] = jobPdp
 	}
 

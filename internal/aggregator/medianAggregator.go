@@ -17,6 +17,7 @@ type MedianAggregatorConfig struct {
 	DeviceType        string `json:"deviceType"`
 	PowerMetric       string `json:"powerMetric"`
 	PerformanceMetric string `json:"performanceMetric"`
+	UseMax            bool   `json:"useMax"`
 }
 
 type MedianDeviceState struct {
@@ -32,6 +33,7 @@ type MedianAggregator struct {
 	powerMetric        string
 	performanceMetric  string
 	deviceType         string
+	useMax             bool
 }
 
 func NewMedianAggregator(rawConfig json.RawMessage) (*MedianAggregator, error) {
@@ -53,6 +55,7 @@ func NewMedianAggregator(rawConfig json.RawMessage) (*MedianAggregator, error) {
 	ag.performanceMetric = config.PerformanceMetric
 	ag.devices = make(map[string]map[string]*MedianDeviceState)
 	ag.deviceType = config.DeviceType
+	ag.useMax = config.UseMax
 
 	return ag, nil
 }
@@ -125,5 +128,5 @@ func (a *MedianAggregator) GetPdpPerTarget() map[Target]float64 {
 		}
 	}
 
-	return DevicePdpToTargetPdp(pdp)
+	return DevicePdpToTargetPdp(pdp, a.useMax)
 }
