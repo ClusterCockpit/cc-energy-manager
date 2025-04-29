@@ -6,10 +6,11 @@ package optimizer
 
 import (
 	"encoding/json"
-	//"fmt"
+	"fmt"
 	"bufio"
 	"os"
 	"slices"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,7 +24,8 @@ var testconfig string = `{
 	"upperBound": 400,
 	"winMinWidth": 100,
 	"winMinSamples": 4,
-	"winMaxSamples": 10
+	"winMaxSamples": 10,
+	"deterministic": true
 }`
 
 func TestWQRInit(t *testing.T) {
@@ -109,22 +111,71 @@ func TestWQROptimize(t *testing.T) {
 		t.Fatalf("Warmup didn't end in expected 3 steps")
 	}
 
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 20; i++ {
 		newLimit = o.Update(ProbeSample(t, samples, newLimit))
 		//fmt.Printf("[%3d] newLimit=%f\n", i, newLimit)
 	}
 
-	if newLimit < 250 || newLimit > 280 {
-		t.Fatal("WQR optimizer did not converge correctly")
+	if newLimit < 260 || newLimit > 280 {
+		t.Fatalf("WQR optimizer did not converge correctly: %f", newLimit)
 	}
 
-	//fmt.Printf("========== CHANGE ==========")
-	//samples = LoadSamples(t, "testdata/firestarter.genoa1", 0)
+	//fmt.Printf("========== CHANGE ==========\n")
+	samples = LoadSamples(t, "testdata/gmx_mpi.bergamo1", 0)
 
-	//for i := 0; i < 100 ; i++ {
-	//	newLimit = o.Update(ProbeSample(t, samples, newLimit))
-	//	fmt.Printf("[%3d] newLimit=%f\n", i, newLimit)
-	//}
+	for i := 0; i < 60 ; i++ {
+		newLimit = o.Update(ProbeSample(t, samples, newLimit))
+		//fmt.Printf("[%3d] newLimit=%f\n", i, newLimit)
+	}
+
+	if newLimit < 190 || newLimit > 250 {
+		t.Fatalf("WQR optimizer did not converge correctly: %f", newLimit)
+	}
+
+	//fmt.Printf("========== CHANGE ==========\n")
+	samples = LoadSamples(t, "testdata/bwbench-GCC.bergamo1", 0)
+
+	for i := 0; i < 60 ; i++ {
+		newLimit = o.Update(ProbeSample(t, samples, newLimit))
+		//fmt.Printf("[%3d] newLimit=%f\n", i, newLimit)
+	}
+
+	if newLimit < 150 || newLimit > 250 {
+		t.Fatalf("WQR optimizer did not converge correctly: %f", newLimit)
+	}
+
+	// ignore unused fmt warning for debugging
+	_ = fmt.Sprintf("")
+}
+
+func TestWQRHardEdge(t *testing.T) {
+	o, err := NewWQROptimizer(json.RawMessage(testconfig))
+	if err != nil {
+		t.Fatalf("failed to init WQROptimizer: %v", err)
+	}
+
+	probeFunc := func(x float64) float64 {
+		if x < 250 {
+			return 1.0 - (x - 250) / 1000
+		}
+		if x > 300 {
+			return 2.0
+		}
+		// smooth transition from 250 to 300
+		return 1 + 1.0 - math.Cos((x - 350)/50 * math.Pi / 2)
+	}
+
+	newLimit, _ := o.Start(42.0)
+	newLimit, _ = o.Start(probeFunc(newLimit))
+	newLimit, _ = o.Start(probeFunc(newLimit))
+
+	for i := 0; i < 30; i++ {
+		newLimit = o.Update(probeFunc(newLimit))
+	}
+
+	if newLimit < 225 || newLimit > 275 {
+		t.Fatalf("WQR optimizer did not converge correctly: %f", newLimit)
+	}
 }
 
 func LoadSamples(t *testing.T, path string, socket int) []SamplePoint {
