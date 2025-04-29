@@ -174,13 +174,15 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 	for i := 0; i < len(x); i++ {
 		x[i] = o.samples[winLeftIndex+i].PowerLimit
 		y[i] = o.samples[winLeftIndex+i].EDP
+		//fmt.Printf("[x=%f y=%f] ", x[i], y[i])
 	}
+	//fmt.Println("")
 
 	coefficients := polyfit.NewFit(x, y, 2).Solve()
 	// ax^2 + bx + c
-	// c := coefficients[2], c is irrelevant for finding a minimum
+	a := coefficients[2]
 	b := coefficients[1]
-	a := coefficients[0]
+	//c := coefficients[0]//, c is irrelevant for finding a minimum
 
 	// If 'a' is positive, our regressed quadratic function has a global minimum.
 	// If 'a' is negative, our regressed quadratic function has a global maximum.
