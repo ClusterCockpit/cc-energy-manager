@@ -51,6 +51,7 @@ type wqrOptimizer struct {
 	samples         []SamplePoint
 	current         float64
 	startupState    int
+	rand            *rand.Rand
 }
 
 const (
@@ -66,6 +67,7 @@ func NewWQROptimizer(config json.RawMessage) (*wqrOptimizer, error) {
 		WinMinWidth     float64 `json:"winMinWidth"`
 		WinMinSamples   int     `json:"winMinSamples"`
 		WinLimitSamples int     `json:"winMaxSamples"`
+		Deterministic   bool    `json:"deterministic"`
 	}{}
 
 	err := json.Unmarshal(config, &c)
@@ -79,6 +81,12 @@ func NewWQROptimizer(config json.RawMessage) (*wqrOptimizer, error) {
 		winMinWidth:     c.WinMinWidth,
 		winMinSamples:   c.WinMinSamples,
 		winLimitSamples: c.WinLimitSamples,
+	}
+
+	if c.Deterministic {
+		o.rand = rand.New(rand.NewSource(42))
+	} else {
+		o.rand = rand.New(rand.NewSource(rand.Int63()))
 	}
 
 	if o.upperBound <= o.lowerBound {
@@ -197,7 +205,7 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 			o.current = o.current - 0.5*(o.current-winLeftPowerLimit)
 			randomize = 0.05
 		}
-		o.current += rand.Float64() * randomize * (o.upperBound - o.lowerBound)
+		o.current += o.rand.Float64() * randomize * (o.upperBound - o.lowerBound)
 		o.current = min(o.current, o.upperBound)
 		o.current = max(o.current, o.lowerBound)
 	} else {
@@ -266,7 +274,7 @@ func (o *wqrOptimizer) CleanupOldSamples(leftIndex, rightIndex int) {
 
 		// We randommize the list before looking sorting by oldest age. That way samples
 		// with equal age are removed in a random order.
-		rand.Shuffle(len(indicesToRemove), func(i, j int) {
+		o.rand.Shuffle(len(indicesToRemove), func(i, j int) {
 			indicesToRemove[i], indicesToRemove[j] = indicesToRemove[j], indicesToRemove[i]
 		})
 
