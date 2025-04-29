@@ -43,9 +43,11 @@ type gssOptimizer struct {
 	c            float64 // inner interval lower point
 	d            float64 // inner interval upper point
 	h            float64 // outer interval distance
+	hMax         float64
 	lowerBarrier float64 // never go below this barrier
 	upperBarrier float64 // never go above this barrier
 	tol          float64
+	counter      int
 	mode         Mode
 	probe        float64
 }
@@ -112,7 +114,7 @@ func (o *gssOptimizer) Update(fx float64) float64 {
 	}
 	cclog.Debugf("Interval distance %f", o.h)
 
-	if o.b > o.upperBarrier { // we hit upper barrier, broaden toward lower
+	if (o.b > o.upperBarrier) && o.counter == 0 { // we hit upper barrier, broaden toward lower
 		// Before:
 		// *-------*---*-------*
 		// a       c   d       b
@@ -123,11 +125,13 @@ func (o *gssOptimizer) Update(fx float64) float64 {
 		// -       -   -       -
 		// |
 		// Probe
+		o.counter = 10 // Lets hope we find the new minimum within 10 iterations if there is any
+		o.fc = nan
 		o.probe = o.a
 		o.mode = BroadenDown
 		cclog.Debugf("\tHit upper barrier. Broaden down: %f", o.probe)
 		return o.probe
-	} else if o.a < o.lowerBarrier { // we hit lower barrier, broaden toward higher
+	} else if o.a < o.lowerBarrier && o.counter == 0 { // we hit lower barrier, broaden toward higher
 		// Before:
 		// *-------*---*-------*
 		// a       c   d       b
@@ -138,6 +142,8 @@ func (o *gssOptimizer) Update(fx float64) float64 {
 		// -       -   -       -
 		//                     |
 		//                     Probe
+		o.counter = 10 // Lets hope we find the new minimum within 10 iterations if there is any
+		o.fd = nan
 		o.probe = o.b
 		o.mode = BroadenUp
 		cclog.Debugf("\tHit lower barrier. Broaden up: %f", o.probe)
@@ -191,6 +197,7 @@ func (o *gssOptimizer) broadenUp() {
 }
 
 func (o *gssOptimizer) Narrow() float64 {
+	o.counter = 0
 	if o.fc < o.fd {
 		if o.h < o.tol { // expand toward lower: c becomes new d and a becomes new c, new probe a
 			// Set fc to nan to not get stuck with old function value
@@ -252,13 +259,17 @@ func (o *gssOptimizer) Narrow() float64 {
 }
 
 func (o *gssOptimizer) BroadenDown() float64 {
+	if o.counter > 0 {
+		o.counter--
+	}
+
 	if math.IsNaN(o.fc) {
 		o.broadenDown()
 		cclog.Debugf("\t initial broaden down: %f", o.probe)
 		return o.probe
 	}
 
-	if o.fa < o.fc { // minimum still outside, further expand
+	if o.fa < o.fc && o.h < o.hMax { // minimum still outside, further expand
 		// Before:
 		//              *-------*---*-------*
 		//              a       c   d       b
@@ -291,13 +302,17 @@ func (o *gssOptimizer) BroadenDown() float64 {
 }
 
 func (o *gssOptimizer) BroadenUp() float64 {
+	if o.counter > 0 {
+		o.counter--
+	}
+
 	if math.IsNaN(o.fd) {
 		o.broadenUp()
 		cclog.Debugf("\t initial broaden up: %f", o.probe)
 		return o.probe
 	}
 
-	if o.fb < o.fd { // minimum still outside, further expand
+	if o.fb < o.fd && o.h < o.hMax { // minimum still outside, further expand
 		// Before:
 		// *-------*---*-------*
 		// a       c   d       b
@@ -354,6 +369,7 @@ func NewGssOptimizer(config json.RawMessage) (*gssOptimizer, error) {
 		fd:           nan,
 		mode:         Narrow,
 		probe:        nan,
+		hMax:         float64(c.Borders.Upper-c.Borders.Lower) * 0.5,
 		tol:          float64(c.Tolerance),
 	}
 
