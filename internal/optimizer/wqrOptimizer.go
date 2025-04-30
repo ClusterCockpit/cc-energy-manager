@@ -149,7 +149,7 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 		winRightPowerLimit = o.samples[winRightIndex-1].PowerLimit
 
 		enoughSamples := winRightIndex-winLeftIndex >= o.winMinSamples
-		enoughWidth := winLeftPowerLimit-winRightPowerLimit >= o.winMinWidth
+		enoughWidth := winRightPowerLimit-winLeftPowerLimit >= o.winMinWidth
 
 		if enoughSamples && enoughWidth {
 			break
@@ -261,6 +261,9 @@ func (o *wqrOptimizer) InsertSample(powerLimit, edp float64) int {
 	o.samples = slices.Insert(o.samples, pos, SamplePoint{PowerLimit: powerLimit, EDP: edp})
 	return pos
 }
+
+// TODO, we should probably rewrite thisand discard, somewhat randomly, samples
+// which are closest to each other.
 
 func (o *wqrOptimizer) CleanupOldSamples(leftIndex, rightIndex int) {
 	// Reset age of samples outside of current window, increment it for all the ones in our window.
