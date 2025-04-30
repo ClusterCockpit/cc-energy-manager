@@ -51,13 +51,13 @@ func TestWQRInsertSample(t *testing.T) {
 	o.InsertSample(307.0, 6.0)
 
 	expectedPowerLimit := []float64{300.0, 305.0, 307.0, 310.0, 320.0, 330.0}
-	expectedEDP := []float64{0.0, 5.0, 6.0, 1.0, 2.0, 3.0}
+	expectedPDP := []float64{0.0, 5.0, 6.0, 1.0, 2.0, 3.0}
 	for i, v := range o.samples {
 		if v.PowerLimit != expectedPowerLimit[i] {
 			t.Errorf("Expected PowerLimit %f at index %d, found %f", expectedPowerLimit[i], i, v.PowerLimit)
 		}
-		if v.EDP != expectedEDP[i] {
-			t.Errorf("Expected EDP %f at index %d, found %f", expectedEDP[i], i, v.EDP)
+		if v.PDP != expectedPDP[i] {
+			t.Errorf("Expected PDP %f at index %d, found %f", expectedPDP[i], i, v.PDP)
 		}
 	}
 }
@@ -71,9 +71,9 @@ func TestWQRCleanupOldSamples(t *testing.T) {
 
 	totalSamples := 50
 	for i := 0; i < totalSamples; i++ {
-		edp := float64(i)
+		pdp := float64(i)
 		power := o.lowerBound + float64(i)/float64(totalSamples-1)*(o.upperBound-o.lowerBound)
-		o.InsertSample(power, edp)
+		o.InsertSample(power, pdp)
 	}
 
 	o.CleanupOldSamples(20, 30)
@@ -82,7 +82,7 @@ func TestWQRCleanupOldSamples(t *testing.T) {
 	o.CleanupOldSamples(22, 38)
 
 	//for i, v := range o.samples {
-	//	fmt.Printf("i=%d pw=%f edp=%f age=%d\n", i, v.PowerLimit, v.EDP, v.Age)
+	//	fmt.Printf("i=%d pw=%f pdp=%f age=%d\n", i, v.PowerLimit, v.PDP, v.Age)
 	//}
 
 	// Because our test config limits the window to 10 samples, and in the last step
@@ -241,7 +241,7 @@ func LoadSamples(t *testing.T, path string, socket int) []SamplePoint {
 		if err != nil {
 			t.Fatal(err)
 		}
-		result = append(result, SamplePoint{PowerLimit: powerLimit, EDP: pdp})
+		result = append(result, SamplePoint{PowerLimit: powerLimit, PDP: pdp})
 	}
 	if err := scanner.Err(); err != nil {
 		t.Fatal(err)
@@ -275,16 +275,16 @@ func ProbeSample(t *testing.T, samples []SamplePoint, powerLimit float64) float6
 	// Find nearest sample
 	pos, _ := slices.BinarySearchFunc(samples, powerLimit, cmpFunc)
 	if pos >= len(samples) {
-		return samples[pos-1].EDP
+		return samples[pos-1].PDP
 	} else if pos > 0 {
 		l := samples[pos-1]
 		r := samples[pos]
 		if powerLimit-l.PowerLimit < r.PowerLimit-powerLimit {
-			return l.EDP
+			return l.PDP
 		} else {
-			return r.EDP
+			return r.PDP
 		}
 	} else {
-		return samples[pos].EDP
+		return samples[pos].PDP
 	}
 }

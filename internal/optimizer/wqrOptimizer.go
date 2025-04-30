@@ -25,7 +25,7 @@ import (
 // - No oscillation
 //
 // The concept of operation is the following:
-// A quadratic regression of the function powerlimit -> edp is calculated.
+// A quadratic regression of the function powerlimit -> pdp is calculated.
 // Based on that, we find the minimum of this regression. As we obtain more and more
 // measurements, the regression will become more accurate.
 // Because the true underlying function is not really a positive quadratic function,
@@ -39,7 +39,7 @@ import (
 
 type SamplePoint struct {
 	PowerLimit float64
-	EDP        float64
+	PDP        float64
 	Age        int
 }
 
@@ -109,7 +109,7 @@ func NewWQROptimizer(config json.RawMessage) (*wqrOptimizer, error) {
 	return &o, nil
 }
 
-func (o *wqrOptimizer) Start(edp float64) (float64, bool) {
+func (o *wqrOptimizer) Start(pdp float64) (float64, bool) {
 	// Perform an initial test regression at the lower boundary, upper boundary,
 	// and inbetween. After that, we can go over to normal operation and perform
 	// a quadratic regression.
@@ -119,12 +119,12 @@ func (o *wqrOptimizer) Start(edp float64) (float64, bool) {
 		o.startupState = STARTUP_UPPER
 		return o.lowerBound, false
 	} else if o.startupState == STARTUP_UPPER {
-		o.InsertSample(o.current, edp)
+		o.InsertSample(o.current, pdp)
 		o.current = o.upperBound
 		o.startupState = STARTUP_MID
 		return o.upperBound, false
 	} else if o.startupState == STARTUP_MID {
-		o.InsertSample(o.current, edp)
+		o.InsertSample(o.current, pdp)
 		o.current = o.lowerBound + 0.5*(o.upperBound-o.lowerBound)
 		return o.current, true
 	}
@@ -133,8 +133,8 @@ func (o *wqrOptimizer) Start(edp float64) (float64, bool) {
 	return 0.0, false
 }
 
-func (o *wqrOptimizer) Update(edp float64) float64 {
-	pos := o.InsertSample(o.current, edp)
+func (o *wqrOptimizer) Update(pdp float64) float64 {
+	pos := o.InsertSample(o.current, pdp)
 
 	// Search for neighbouring samples to our current observed samples until:
 	// - winMinSamples is reached and minMinWidth is reached (latter only if enough samples are available)
@@ -182,7 +182,7 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 
 	for i := 0; i < len(x); i++ {
 		x[i] = o.samples[winLeftIndex+i].PowerLimit
-		y[i] = o.samples[winLeftIndex+i].EDP
+		y[i] = o.samples[winLeftIndex+i].PDP
 		//fmt.Printf("[x=%f y=%f] ", x[i], y[i])
 	}
 	//fmt.Println("")
@@ -234,10 +234,10 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 	}
 
 	//nx := fmt.Sprintf("%f", o.samples[winLeftIndex].PowerLimit)
-	//ny := fmt.Sprintf("%f", o.samples[winLeftIndex].EDP)
+	//ny := fmt.Sprintf("%f", o.samples[winLeftIndex].PDP)
 	//for i := winLeftIndex + 1; i < winRightIndex; i++ {
 	//	nx = fmt.Sprintf("%s,%f", nx, o.samples[i].PowerLimit)
-	//	ny = fmt.Sprintf("%s,%f", ny, o.samples[i].EDP)
+	//	ny = fmt.Sprintf("%s,%f", ny, o.samples[i].PDP)
 	//}
 	//fmt.Printf("%.12f;%.12f;%.12f;%f;%f;%f;%d;%s;%s\n", a, b, c, winLeftPowerLimit, winRightPowerLimit, o.current, winRightIndex - winLeftIndex, nx, ny)
 	_ = c
@@ -246,7 +246,7 @@ func (o *wqrOptimizer) Update(edp float64) float64 {
 	return o.current
 }
 
-func (o *wqrOptimizer) InsertSample(powerLimit, edp float64) int {
+func (o *wqrOptimizer) InsertSample(powerLimit, pdp float64) int {
 	cmpFunc := func(s SamplePoint, t float64) int {
 		if s.PowerLimit < t {
 			return -1
@@ -258,7 +258,7 @@ func (o *wqrOptimizer) InsertSample(powerLimit, edp float64) int {
 	}
 
 	pos, _ := slices.BinarySearchFunc(o.samples, powerLimit, cmpFunc)
-	o.samples = slices.Insert(o.samples, pos, SamplePoint{PowerLimit: powerLimit, EDP: edp})
+	o.samples = slices.Insert(o.samples, pos, SamplePoint{PowerLimit: powerLimit, PDP: pdp})
 	return pos
 }
 
