@@ -94,7 +94,7 @@ func TestWQRCleanupOldSamples(t *testing.T) {
 }
 
 func TestWQROptimize(t *testing.T) {
-	samples := LoadSamples(t, "testdata/firestarter.bergamo1", 0)
+	samples := LoadSamples(t, "testdata/FIRESTARTER.bergamo1", 0)
 
 	o, err := NewWQROptimizer(json.RawMessage(testconfig))
 	if err != nil {
@@ -111,13 +111,13 @@ func TestWQROptimize(t *testing.T) {
 		t.Fatalf("Warmup didn't end in expected 3 steps")
 	}
 
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 30; i++ {
 		newLimit = o.Update(ProbeSample(t, samples, newLimit))
 		//fmt.Printf("[%3d] newLimit=%f\n", i, newLimit)
 	}
 
 	if newLimit < 260 || newLimit > 280 {
-		t.Fatalf("WQR optimizer did not converge correctly: %f", newLimit)
+		t.Errorf("WQR optimizer did not converge FIRESTARTER correctly: %f", newLimit)
 	}
 
 	//fmt.Printf("========== CHANGE ==========\n")
@@ -129,19 +129,19 @@ func TestWQROptimize(t *testing.T) {
 	}
 
 	if newLimit < 190 || newLimit > 250 {
-		t.Fatalf("WQR optimizer did not converge correctly: %f", newLimit)
+		t.Errorf("WQR optimizer did not converge GROMACS correctly: %f", newLimit)
 	}
 
 	//fmt.Printf("========== CHANGE ==========\n")
 	samples = LoadSamples(t, "testdata/bwbench-GCC.bergamo1", 0)
 
-	for i := 0; i < 60 ; i++ {
+	for i := 0; i < 30 ; i++ {
 		newLimit = o.Update(ProbeSample(t, samples, newLimit))
 		//fmt.Printf("[%3d] newLimit=%f\n", i, newLimit)
 	}
 
 	if newLimit < 150 || newLimit > 250 {
-		t.Fatalf("WQR optimizer did not converge correctly: %f", newLimit)
+		t.Errorf("WQR optimizer did not converge bwbench correctly: %f", newLimit)
 	}
 
 	// ignore unused fmt warning for debugging
@@ -178,6 +178,35 @@ func TestWQRHardEdge(t *testing.T) {
 	}
 }
 
+func TestWQRCCFront(t *testing.T) {
+	var testconfig string = `{
+		"lowerBound": 30,
+		"upperBound": 85,
+		"winMinWidth": 10,
+		"winMinSamples": 4,
+		"winMaxSamples": 10,
+		"deterministic": true
+	}`
+
+	samples := LoadSamples(t, "testdata/gromacs.ccnode01", 0)
+
+	o, err := NewWQROptimizer(json.RawMessage(testconfig))
+	if err != nil {
+		t.Fatalf("failed to init WQROptimizer: %v", err)
+	}
+
+	//fmt.Printf("==============================================================\n")
+
+	newLimit, _ := o.Start(42.0)
+	newLimit, _ = o.Start(ProbeSample(t, samples, newLimit))
+	newLimit, _ = o.Start(ProbeSample(t, samples, newLimit))
+
+	for i := 0; i < 100; i++ {
+		newLimit = o.Update(ProbeSample(t, samples, newLimit))
+		//fmt.Printf("[%3d] newLimit=%f\n", i, newLimit)
+	}
+}
+
 func LoadSamples(t *testing.T, path string, socket int) []SamplePoint {
 	file, err := os.Open(path)
 	if err != nil {
@@ -191,10 +220,10 @@ func LoadSamples(t *testing.T, path string, socket int) []SamplePoint {
 	for scanner.Scan() {
 		line := scanner.Text()
 		elements := strings.Split(line, ";")
-		if len(elements) != 6 {
+		if len(elements) != 8 {
 			continue
 		}
-		if elements[0] == "SOCKET" {
+		if elements[1] == "POWER_LIMIT" || elements[0] == "SOCKET" {
 			continue
 		}
 		socketTest, err := strconv.Atoi(strings.TrimSpace(elements[0]))
@@ -208,11 +237,11 @@ func LoadSamples(t *testing.T, path string, socket int) []SamplePoint {
 		if err != nil {
 			t.Fatal(err)
 		}
-		edp, err := strconv.ParseFloat(strings.TrimSpace(elements[4]), 64)
+		pdp, err := strconv.ParseFloat(strings.TrimSpace(elements[4]), 64)
 		if err != nil {
 			t.Fatal(err)
 		}
-		result = append(result, SamplePoint{PowerLimit: powerLimit, EDP: edp})
+		result = append(result, SamplePoint{PowerLimit: powerLimit, EDP: pdp})
 	}
 	if err := scanner.Err(); err != nil {
 		t.Fatal(err)
@@ -221,6 +250,10 @@ func LoadSamples(t *testing.T, path string, socket int) []SamplePoint {
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].PowerLimit < result[j].PowerLimit
 	})
+
+	if len(result) < 10 {
+		t.Fatal("Sample testdata contains less than 10 points. Did you specify the right file?")
+	}
 
 	return result
 }
