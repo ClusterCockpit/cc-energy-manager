@@ -7,10 +7,10 @@ package optimizer
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"slices"
 	"sort"
-	"math"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	"github.com/openacid/slimarray/polyfit"
@@ -191,7 +191,7 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 	// ax^2 + bx + c
 	a := coefficients[2]
 	b := coefficients[1]
-	c := coefficients[0]//, c is irrelevant for finding a minimum
+	c := coefficients[0] //, c is irrelevant for finding a minimum
 
 	// If 'a' is positive, our regressed quadratic function has a global minimum.
 	// If 'a' is negative, our regressed quadratic function has a global maximum.
@@ -223,7 +223,7 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		// TODO we might want to add a smoothing factor here, in order to reduce oscillation
 		// at the true minimum.
 		o.current = -b / (2.0 * a)
-		o.current += (0.05*o.rand.Float64() - 0.025) * (o.upperBound-o.lowerBound)
+		o.current += (0.05*o.rand.Float64() - 0.025) * (o.upperBound - o.lowerBound)
 	}
 
 	if o.current < o.lowerBound {

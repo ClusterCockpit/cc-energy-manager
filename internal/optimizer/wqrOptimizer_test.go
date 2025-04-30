@@ -5,12 +5,12 @@
 package optimizer
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
-	"bufio"
+	"math"
 	"os"
 	"slices"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -123,7 +123,7 @@ func TestWQROptimize(t *testing.T) {
 	//fmt.Printf("========== CHANGE ==========\n")
 	samples = LoadSamples(t, "testdata/gmx_mpi.bergamo1", 0)
 
-	for i := 0; i < 60 ; i++ {
+	for i := 0; i < 60; i++ {
 		newLimit = o.Update(ProbeSample(t, samples, newLimit))
 		//fmt.Printf("[%3d] newLimit=%f\n", i, newLimit)
 	}
@@ -135,7 +135,7 @@ func TestWQROptimize(t *testing.T) {
 	//fmt.Printf("========== CHANGE ==========\n")
 	samples = LoadSamples(t, "testdata/bwbench-GCC.bergamo1", 0)
 
-	for i := 0; i < 30 ; i++ {
+	for i := 0; i < 30; i++ {
 		newLimit = o.Update(ProbeSample(t, samples, newLimit))
 		//fmt.Printf("[%3d] newLimit=%f\n", i, newLimit)
 	}
@@ -156,13 +156,13 @@ func TestWQRHardEdge(t *testing.T) {
 
 	probeFunc := func(x float64) float64 {
 		if x < 250 {
-			return 1.0 - (x - 250) / 1000
+			return 1.0 - (x-250)/1000
 		}
 		if x > 300 {
 			return 2.0
 		}
 		// smooth transition from 250 to 300
-		return 1 + 1.0 - math.Cos((x - 350)/50 * math.Pi / 2)
+		return 1 + 1.0 - math.Cos((x-350)/50*math.Pi/2)
 	}
 
 	newLimit, _ := o.Start(42.0)
