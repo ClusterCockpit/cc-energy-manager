@@ -7,7 +7,7 @@ toolchain go1.24.0
 require (
 	github.com/ClusterCockpit/cc-lib v0.2.0
 	github.com/ClusterCockpit/cc-node-controller v0.0.0-20250328152327-c64fc460fdd2
-	github.com/openacid/slimarray v0.1.3
+	gonum.org/v1/gonum v0.8.1
 )
 
 require (

@@ -5,6 +5,7 @@
 package optimizer
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -13,7 +14,7 @@ import (
 	"sort"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
-	"github.com/openacid/slimarray/polyfit"
+	"gonum.org/v1/gonum/mat"
 )
 
 // TODO rewrite this text
@@ -40,7 +41,6 @@ import (
 type SamplePoint struct {
 	PowerLimit float64
 	PDP        float64
-	Age        int
 }
 
 type wqrOptimizer struct {
@@ -187,31 +187,33 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 	}
 	//fmt.Println("")
 
-	coefficients := polyfit.NewFit(x, y, 2).Solve()
+	coefficients, err := PolyFit(x, y, 2)
 	// ax^2 + bx + c
 	a := coefficients[2]
 	b := coefficients[1]
-	c := coefficients[0] //, c is irrelevant for finding a minimum
+	c := coefficients[0]
 
 	// If 'a' is positive, our regressed quadratic function has a global minimum.
 	// If 'a' is negative, our regressed quadratic function has a global maximum.
-	if math.IsNaN(a) || math.IsInf(a, 0) || math.IsNaN(b) || math.IsInf(b, 0) {
+	if err != nil || math.IsNaN(a) || math.IsInf(a, 0) || math.IsNaN(b) || math.IsInf(b, 0) {
 		// Not sure if the polyfit library is supposed to do that, but it does.
 		// I assume this may occur due to numerical instability. Just move around
 		// randomly a bit in this case.
-		o.current += o.rand.Float64() * 0.1 * (o.upperBound - o.lowerBound)
+		o.current += (o.rand.Float64() * 0.1 - 0.05) * (o.upperBound - o.lowerBound)
 	} else if a <= 0.0 {
-		// If a is negative, we can't search a minimum. Instead, we use the slope 'b'
-		// to determine in which direction to search.
+		// If a is negative, we can't search a minimum. Instead, we use the slope
+		// between the window borders to determine a search direction.
+		yl := a * (winLeftPowerLimit * winLeftPowerLimit) + b * winLeftPowerLimit + c
+		yr := a * (winRightPowerLimit * winRightPowerLimit) + b * winRightPowerLimit + c
 		randomize := 0.2
-		if b > 0.0 {
+		if yl < yr {
 			o.current = o.current - 0.5*(o.current-winLeftPowerLimit)
 			randomize = 0.05
 		} else if b < 0.0 {
 			o.current = o.current + 0.5*(winRightPowerLimit-o.current)
 			randomize = 0.05
 		}
-		o.current += o.rand.Float64() * randomize * (o.upperBound - o.lowerBound)
+		o.current += (o.rand.Float64() - 0.5) * randomize * (o.upperBound - o.lowerBound)
 	} else {
 		// for positive 'a', the minimum of ax^2 + bx + c is the following:
 		// min(ax^2 + bx + c) = solve(2ax + b == 0)
@@ -233,14 +235,13 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		o.current = min(o.current, o.upperBound) - 0.025*o.rand.Float64()*(o.upperBound-o.lowerBound)
 	}
 
-	//nx := fmt.Sprintf("%f", o.samples[winLeftIndex].PowerLimit)
-	//ny := fmt.Sprintf("%f", o.samples[winLeftIndex].PDP)
-	//for i := winLeftIndex + 1; i < winRightIndex; i++ {
-	//	nx = fmt.Sprintf("%s,%f", nx, o.samples[i].PowerLimit)
-	//	ny = fmt.Sprintf("%s,%f", ny, o.samples[i].PDP)
+	//nx := fmt.Sprintf("%f", x[0])
+	//ny := fmt.Sprintf("%f", y[0])
+	//for i := 1; i < len(x); i++ {
+	//	nx = fmt.Sprintf("%s,%f", nx, x[i])
+	//	ny = fmt.Sprintf("%s,%f", ny, y[i])
 	//}
 	//fmt.Printf("%.12f;%.12f;%.12f;%f;%f;%f;%d;%s;%s\n", a, b, c, winLeftPowerLimit, winRightPowerLimit, o.current, winRightIndex - winLeftIndex, nx, ny)
-	_ = c
 
 	o.CleanupOldSamples(winLeftIndex, winRightIndex)
 	return o.current
@@ -266,43 +267,47 @@ func (o *wqrOptimizer) InsertSample(powerLimit, pdp float64) int {
 // which are closest to each other.
 
 func (o *wqrOptimizer) CleanupOldSamples(leftIndex, rightIndex int) {
-	// Reset age of samples outside of current window, increment it for all the ones in our window.
-	// The idea is that we will converge in an area somewhere. In this area, we do not want
-	// to accumulate infinitely old values, so we discard them. The ones outside we will keep
-	// in order to at least have a rought idea where previous performance was. Should the window
-	// move back to the area, which was previously not part of our window, those should get cycled
-	// at some point as well.
-	for i := 0; i < leftIndex; i++ {
-		o.samples[i].Age = max(0, o.samples[i].Age-1)
+	type ds struct {
+		distance float64
+		index int
 	}
-	for i := leftIndex; i < rightIndex; i++ {
-		o.samples[i].Age += 1
-	}
-	for i := rightIndex; i < len(o.samples); i++ {
-		o.samples[i].Age = max(0, o.samples[i].Age-1)
-	}
-
-	// Now we limit the amount of samples inside the window (between leftIndex and rightIndex) to count of winLimitSamples.
-	// We prioritize removal of the oldest values.
-	indicesToRemove := make([]int, rightIndex-leftIndex)
-	if len(indicesToRemove) >= o.winLimitSamples {
-		for i := 0; i < len(indicesToRemove); i++ {
-			indicesToRemove[i] = i + leftIndex
+	distances := make([]ds, len(o.samples))
+	for i := 0; i < len(distances); i++ {
+		var dl float64
+		if i <= 0 {
+			dl = 100000
+		} else {
+			dl = o.samples[i].PowerLimit - o.samples[i-1].PowerLimit
 		}
 
-		// We randommize the list before looking sorting by oldest age. That way samples
-		// with equal age are removed in a random order.
-		o.rand.Shuffle(len(indicesToRemove), func(i, j int) {
-			indicesToRemove[i], indicesToRemove[j] = indicesToRemove[j], indicesToRemove[i]
-		})
+		var dr float64
+		if i >= len(distances)-1 {
+			dr = 100000
+		} else {
+			dr = o.samples[i+1].PowerLimit - o.samples[i].PowerLimit
+		}
 
-		sort.Slice(indicesToRemove, func(i, j int) bool {
-			return o.samples[indicesToRemove[i]].Age < o.samples[indicesToRemove[j]].Age
-		})
-
-		indicesToRemove = indicesToRemove[o.winLimitSamples:]
-		o.DeleteSamplesAtIndices(leftIndex, rightIndex, indicesToRemove)
+		distances[i].distance = dl + dr + 0.01 * (o.rand.Float64() - 0.5) * (o.upperBound - o.lowerBound)
+		distances[i].index = i
 	}
+
+	distances = distances[leftIndex:rightIndex]
+	if len(distances) < o.winLimitSamples {
+		return
+	}
+	slices.SortFunc(distances, func(a, b ds) int {
+		return cmp.Compare(a.distance, b.distance)
+	})
+	distances = distances[o.winLimitSamples:]
+	slices.SortFunc(distances, func(a, b ds) int {
+		return cmp.Compare(a.distance, b.distance)
+	})
+	indicesToRemove := make([]int, len(distances))
+	for i := 0; i < len(indicesToRemove); i++ {
+		indicesToRemove[i] = distances[i].index
+	}
+
+	o.DeleteSamplesAtIndices(leftIndex, rightIndex, indicesToRemove)
 }
 
 func (o *wqrOptimizer) DeleteSamplesAtIndices(leftIndex, rightIndex int, indicesToRemove []int) {
@@ -326,4 +331,33 @@ func (o *wqrOptimizer) DeleteSamplesAtIndices(leftIndex, rightIndex int, indices
 
 	o.samples = append(leftSamples, windowSamples[0:writeIndex]...)
 	o.samples = append(o.samples, rightSamples...)
+}
+
+func PolyFit(x, y []float64, degree int) ([]float64, error) {
+	// Based on this example:
+	// https://github.com/gonum/gonum/issues/1759#issuecomment-1005668867
+	d := degree + 1
+	a := mat.NewDense(len(x), d, nil)
+	for i := range x {
+		for j, p := 0, 1.; j < d; j, p = j+1, p*x[i] {
+			a.Set(i, j, p)
+		}
+	}
+	b := mat.NewDense(len(y), 1, y)
+	c := mat.NewDense(d, 1, nil)
+
+
+	var qr mat.QR
+	qr.Factorize(a)
+
+	retval := make([]float64, d)
+	err := qr.SolveTo(c, false, b)
+	if err != nil {
+		return retval, fmt.Errorf("Unable to fit curve: %w", err)
+	}
+
+	for i := 0; i < d; i++ {
+		retval[i] = c.At(i, 0)
+	}
+	return retval, nil
 }
