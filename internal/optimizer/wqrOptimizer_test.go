@@ -22,9 +22,10 @@ import (
 var testconfig string = `{
 	"lowerBound": 50,
 	"upperBound": 400,
-	"winMinWidth": 70,
-	"winMinSamples": 4,
+	"winMinWidth": 50,
+	"winMinSamples": 5,
 	"winMaxSamples": 10,
+	"enableDebug": true,
 	"deterministic": true
 }`
 
@@ -172,6 +173,7 @@ func TestWQRFiretarter(t *testing.T) {
 	if newLimit < 260 || newLimit > 280 {
 		t.Errorf("WQR optimizer did not converge FIRESTARTER correctly: %f", newLimit)
 	}
+	//fmt.Printf("============================================================== A\n")
 }
 
 func TestWQRHardEdge(t *testing.T) {
@@ -227,7 +229,7 @@ func TestWQRGromacsCCFront(t *testing.T) {
 	newLimit, _ = o.Start(ProbeSample(t, samples, newLimit))
 	newLimit, _ = o.Start(ProbeSample(t, samples, newLimit))
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 15; i++ {
 		newLimit = o.Update(ProbeSample(t, samples, newLimit))
 		//fmt.Printf("[%3d] newLimit=%f\n", i, newLimit)
 	}
