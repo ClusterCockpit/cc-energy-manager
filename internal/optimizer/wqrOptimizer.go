@@ -149,7 +149,10 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		winRightPowerLimit = o.samples[winRightIndex-1].PowerLimit
 
 		enoughSamples := winRightIndex-winLeftIndex >= o.winMinSamples
-		enoughWidth := winRightPowerLimit-winLeftPowerLimit >= o.winMinWidth
+		enoughWidthLeft := o.current - winLeftPowerLimit >= o.winMinWidth/2
+		enoughWidthRight := winRightPowerLimit - o.current >= o.winMinWidth/2
+		enoughWidth := enoughWidthLeft && enoughWidthRight
+		//enoughWidth := winRightPowerLimit - winLeftPowerLimit >= o.winMinWidth
 
 		if enoughSamples && enoughWidth {
 			break
@@ -193,6 +196,8 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 	b := coefficients[1]
 	c := coefficients[0]
 
+	o.CleanupOldSamples(winLeftIndex, winRightIndex)
+
 	// If 'a' is positive, our regressed quadratic function has a global minimum.
 	// If 'a' is negative, our regressed quadratic function has a global maximum.
 	if err != nil || math.IsNaN(a) || math.IsInf(a, 0) || math.IsNaN(b) || math.IsInf(b, 0) {
@@ -235,15 +240,14 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		o.current = min(o.current, o.upperBound) - 0.025*o.rand.Float64()*(o.upperBound-o.lowerBound)
 	}
 
-	//nx := fmt.Sprintf("%f", x[0])
-	//ny := fmt.Sprintf("%f", y[0])
-	//for i := 1; i < len(x); i++ {
-	//	nx = fmt.Sprintf("%s,%f", nx, x[i])
-	//	ny = fmt.Sprintf("%s,%f", ny, y[i])
-	//}
-	//fmt.Printf("%.12f;%.12f;%.12f;%f;%f;%f;%d;%s;%s\n", a, b, c, winLeftPowerLimit, winRightPowerLimit, o.current, winRightIndex - winLeftIndex, nx, ny)
+	nx := fmt.Sprintf("%f", x[0])
+	ny := fmt.Sprintf("%f", y[0])
+	for i := 1; i < len(x); i++ {
+		nx = fmt.Sprintf("%s,%f", nx, x[i])
+		ny = fmt.Sprintf("%s,%f", ny, y[i])
+	}
+	fmt.Printf("%.12f;%.12f;%.12f;%f;%f;%f;%d;%s;%s\n", a, b, c, winLeftPowerLimit, winRightPowerLimit, o.current, winRightIndex - winLeftIndex, nx, ny)
 
-	o.CleanupOldSamples(winLeftIndex, winRightIndex)
 	return o.current
 }
 
@@ -290,38 +294,45 @@ func (o *wqrOptimizer) CleanupOldSamples(leftIndex, rightIndex int) {
 		distances[i].distance = dl + dr + 0.01 * (o.rand.Float64() - 0.5) * (o.upperBound - o.lowerBound)
 		distances[i].index = i
 	}
+	//fmt.Printf("a distances: %+v\n", distances)
 
 	distances = distances[leftIndex:rightIndex]
 	if len(distances) < o.winLimitSamples {
 		return
 	}
+	//fmt.Printf("b distances: %+v\n", distances)
 	slices.SortFunc(distances, func(a, b ds) int {
-		return cmp.Compare(a.distance, b.distance)
+		// sort in descending order (hence why Compare(b, a) and not Compare(a, b)
+		return cmp.Compare(b.distance, a.distance)
 	})
+	//fmt.Printf("c distances: %+v\n", distances)
 	distances = distances[o.winLimitSamples:]
-	slices.SortFunc(distances, func(a, b ds) int {
-		return cmp.Compare(a.distance, b.distance)
-	})
 	indicesToRemove := make([]int, len(distances))
 	for i := 0; i < len(indicesToRemove); i++ {
 		indicesToRemove[i] = distances[i].index
 	}
 
-	o.DeleteSamplesAtIndices(leftIndex, rightIndex, indicesToRemove)
+	//fmt.Printf("d distances: %+v\n", distances)
+
+	// exclude values outside the desired window from deletion
+	indicesToRemove = slices.DeleteFunc(indicesToRemove, func(index int) bool {
+		return math.Abs(o.samples[index].PowerLimit - o.current) > o.winMinWidth / 2
+	})
+
+	//fmt.Printf("e distances: %+v\n", distances)
+
+	o.DeleteSamplesAtIndices(indicesToRemove)
 }
 
-func (o *wqrOptimizer) DeleteSamplesAtIndices(leftIndex, rightIndex int, indicesToRemove []int) {
+func (o *wqrOptimizer) DeleteSamplesAtIndices(indicesToRemove []int) {
 	sort.Ints(indicesToRemove)
-	// leftIndex and rightIndex are merely an optimization so that we do not iterate over
-	// unnecessary values.
-	leftSamples := o.samples[0:leftIndex]
-	windowSamples := o.samples[leftIndex:rightIndex]
-	rightSamples := o.samples[rightIndex:len(o.samples)]
+	//fmt.Printf("           -> to remove: %v\n", indicesToRemove)
+	//fmt.Printf("samples before: %+v\n", o.samples)
 
 	indexIndex := 0
 	writeIndex := 0
-	for readIndex := 0; readIndex < len(windowSamples); readIndex++ {
-		if indexIndex < len(indicesToRemove) && leftIndex+readIndex == indicesToRemove[indexIndex] {
+	for readIndex := 0; readIndex < len(o.samples); readIndex++ {
+		if indexIndex < len(indicesToRemove) && readIndex == indicesToRemove[indexIndex] {
 			indexIndex += 1
 		} else {
 			o.samples[writeIndex] = o.samples[readIndex]
@@ -329,8 +340,8 @@ func (o *wqrOptimizer) DeleteSamplesAtIndices(leftIndex, rightIndex int, indices
 		}
 	}
 
-	o.samples = append(leftSamples, windowSamples[0:writeIndex]...)
-	o.samples = append(o.samples, rightSamples...)
+	o.samples = o.samples[0:writeIndex]
+	//fmt.Printf("samples after: %+v\n", o.samples)
 }
 
 func PolyFit(x, y []float64, degree int) ([]float64, error) {
