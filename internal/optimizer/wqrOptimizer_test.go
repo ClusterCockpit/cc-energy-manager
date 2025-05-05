@@ -22,7 +22,7 @@ import (
 var testconfig string = `{
 	"lowerBound": 50,
 	"upperBound": 400,
-	"winMinWidth": 100,
+	"winMinWidth": 70,
 	"winMinSamples": 4,
 	"winMaxSamples": 10,
 	"deterministic": true
@@ -93,7 +93,7 @@ func TestWQRCleanupOldSamples(t *testing.T) {
 	}
 }
 
-func TestWQROptimize(t *testing.T) {
+func TestWQRMixed(t *testing.T) {
 	samples := LoadSamples(t, "testdata/FIRESTARTER.bergamo1", 0)
 
 	o, err := NewWQROptimizer(json.RawMessage(testconfig))
@@ -148,6 +148,32 @@ func TestWQROptimize(t *testing.T) {
 	_ = fmt.Sprintf("")
 }
 
+func TestWQRFiretarter(t *testing.T) {
+	samples := LoadSamples(t, "testdata/FIRESTARTER.bergamo1", 0)
+
+	o, err := NewWQROptimizer(json.RawMessage(testconfig))
+	if err != nil {
+		t.Fatalf("failed to init WQROptimizer: %v", err)
+	}
+
+	//fmt.Printf("============================================================== A\n")
+
+	newLimit, _ := o.Start(42.0)
+	//fmt.Printf("[ W1] newLimit=%f\n", newLimit)
+	newLimit, _ = o.Start(ProbeSample(t, samples, newLimit))
+	//fmt.Printf("[ W2] newLimit=%f\n", newLimit)
+	newLimit, _ = o.Start(ProbeSample(t, samples, newLimit))
+
+	for i := 0; i < 15; i++ {
+		newLimit = o.Update(ProbeSample(t, samples, newLimit))
+		//fmt.Printf("[%3d] newLimit=%f\n", i, newLimit)
+	}
+
+	if newLimit < 260 || newLimit > 280 {
+		t.Errorf("WQR optimizer did not converge FIRESTARTER correctly: %f", newLimit)
+	}
+}
+
 func TestWQRHardEdge(t *testing.T) {
 	o, err := NewWQROptimizer(json.RawMessage(testconfig))
 	if err != nil {
@@ -178,7 +204,7 @@ func TestWQRHardEdge(t *testing.T) {
 	}
 }
 
-func TestWQRCCFront(t *testing.T) {
+func TestWQRGromacsCCFront(t *testing.T) {
 	var testconfig string = `{
 		"lowerBound": 30,
 		"upperBound": 85,
