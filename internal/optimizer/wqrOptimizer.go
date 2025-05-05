@@ -43,6 +43,11 @@ type SamplePoint struct {
 	PDP        float64
 }
 
+type ds struct {
+	distance float64
+	index int
+}
+
 type wqrOptimizer struct {
 	lowerBound      float64
 	upperBound      float64
@@ -149,10 +154,7 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		winRightPowerLimit = o.samples[winRightIndex-1].PowerLimit
 
 		enoughSamples := winRightIndex-winLeftIndex >= o.winMinSamples
-		enoughWidthLeft := o.current - winLeftPowerLimit >= o.winMinWidth/2
-		enoughWidthRight := winRightPowerLimit - o.current >= o.winMinWidth/2
-		enoughWidth := enoughWidthLeft && enoughWidthRight
-		//enoughWidth := winRightPowerLimit - winLeftPowerLimit >= o.winMinWidth
+		enoughWidth := winRightPowerLimit - winLeftPowerLimit >= o.winMinWidth
 
 		if enoughSamples && enoughWidth {
 			break
@@ -196,6 +198,17 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 	b := coefficients[1]
 	c := coefficients[0]
 
+	// Randomly move a bit into the direction where there is the most space between samples.
+	// This hopefully avoids big gaps in the regression, which otherwise cause inaccuracies.
+	distances := o.GetSampleDistances()
+	distances = distances[winLeftIndex:winRightIndex]
+	SortSampleDistanceDescending(distances)
+
+	distanceImbalanceCorrection := 0.0
+	if distances[0].distance > distances[len(distances)-1].distance * 3 {
+		distanceImbalanceCorrection += (0.5*o.rand.Float64()) * (o.samples[distances[0].index].PowerLimit - o.current)
+	}
+
 	o.CleanupOldSamples(winLeftIndex, winRightIndex)
 
 	// If 'a' is positive, our regressed quadratic function has a global minimum.
@@ -223,16 +236,14 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		// for positive 'a', the minimum of ax^2 + bx + c is the following:
 		// min(ax^2 + bx + c) = solve(2ax + b == 0)
 		//   = solve(2ax == -b) = solve(x == -b/2a) = -b/2a
-		// If the result is outside of the bounds, limit it to the bounds.
-		// In that case, apply a random bounce effect. Hopefully this avoids deadlocks are the
-		// borders.
-
-		// TODO we might want to add a smoothing factor here, in order to reduce oscillation
-		// at the true minimum.
 		o.current = -b / (2.0 * a)
-		o.current += (0.05*o.rand.Float64() - 0.025) * (o.upperBound - o.lowerBound)
+		o.current += (0.1*o.rand.Float64() - 0.05) * (winRightPowerLimit - winLeftPowerLimit)
+		o.current += distanceImbalanceCorrection
 	}
 
+	// If the result is outside of the bounds, limit it to the bounds.
+	// In that case, apply a random bounce effect. Hopefully this avoids deadlocks are the
+	// borders.
 	if o.current < o.lowerBound {
 		o.current = max(o.current, o.lowerBound) + 0.025*o.rand.Float64()*(o.upperBound-o.lowerBound)
 	}
@@ -240,13 +251,13 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		o.current = min(o.current, o.upperBound) - 0.025*o.rand.Float64()*(o.upperBound-o.lowerBound)
 	}
 
-	nx := fmt.Sprintf("%f", x[0])
-	ny := fmt.Sprintf("%f", y[0])
-	for i := 1; i < len(x); i++ {
-		nx = fmt.Sprintf("%s,%f", nx, x[i])
-		ny = fmt.Sprintf("%s,%f", ny, y[i])
-	}
-	fmt.Printf("%.12f;%.12f;%.12f;%f;%f;%f;%d;%s;%s\n", a, b, c, winLeftPowerLimit, winRightPowerLimit, o.current, winRightIndex - winLeftIndex, nx, ny)
+	//nx := fmt.Sprintf("%f", x[0])
+	//ny := fmt.Sprintf("%f", y[0])
+	//for i := 1; i < len(x); i++ {
+	//	nx = fmt.Sprintf("%s,%f", nx, x[i])
+	//	ny = fmt.Sprintf("%s,%f", ny, y[i])
+	//}
+	//fmt.Printf("%.12f;%.12f;%.12f;%f;%f;%f;%d;%s;%s\n", a, b, c, winLeftPowerLimit, winRightPowerLimit, o.current, winRightIndex - winLeftIndex, nx, ny)
 
 	return o.current
 }
@@ -267,33 +278,8 @@ func (o *wqrOptimizer) InsertSample(powerLimit, pdp float64) int {
 	return pos
 }
 
-// TODO, we should probably rewrite thisand discard, somewhat randomly, samples
-// which are closest to each other.
-
 func (o *wqrOptimizer) CleanupOldSamples(leftIndex, rightIndex int) {
-	type ds struct {
-		distance float64
-		index int
-	}
-	distances := make([]ds, len(o.samples))
-	for i := 0; i < len(distances); i++ {
-		var dl float64
-		if i <= 0 {
-			dl = 100000
-		} else {
-			dl = o.samples[i].PowerLimit - o.samples[i-1].PowerLimit
-		}
-
-		var dr float64
-		if i >= len(distances)-1 {
-			dr = 100000
-		} else {
-			dr = o.samples[i+1].PowerLimit - o.samples[i].PowerLimit
-		}
-
-		distances[i].distance = dl + dr + 0.01 * (o.rand.Float64() - 0.5) * (o.upperBound - o.lowerBound)
-		distances[i].index = i
-	}
+	distances := o.GetSampleDistances()
 	//fmt.Printf("a distances: %+v\n", distances)
 
 	distances = distances[leftIndex:rightIndex]
@@ -301,10 +287,7 @@ func (o *wqrOptimizer) CleanupOldSamples(leftIndex, rightIndex int) {
 		return
 	}
 	//fmt.Printf("b distances: %+v\n", distances)
-	slices.SortFunc(distances, func(a, b ds) int {
-		// sort in descending order (hence why Compare(b, a) and not Compare(a, b)
-		return cmp.Compare(b.distance, a.distance)
-	})
+	SortSampleDistanceDescending(distances)
 	//fmt.Printf("c distances: %+v\n", distances)
 	distances = distances[o.winLimitSamples:]
 	indicesToRemove := make([]int, len(distances))
@@ -371,4 +354,33 @@ func PolyFit(x, y []float64, degree int) ([]float64, error) {
 		retval[i] = c.At(i, 0)
 	}
 	return retval, nil
+}
+
+func (o *wqrOptimizer) GetSampleDistances() []ds {
+	distances := make([]ds, len(o.samples))
+	for i := 0; i < len(distances); i++ {
+		var dl float64
+		if i <= 0 {
+			dl = 100000
+		} else {
+			dl = o.samples[i].PowerLimit - o.samples[i-1].PowerLimit
+		}
+
+		var dr float64
+		if i >= len(distances)-1 {
+			dr = 100000
+		} else {
+			dr = o.samples[i+1].PowerLimit - o.samples[i].PowerLimit
+		}
+
+		distances[i].distance = dl + dr + 0.01 * (o.rand.Float64() - 0.5) * (o.upperBound - o.lowerBound)
+		distances[i].index = i
+	}
+	return distances
+}
+
+func SortSampleDistanceDescending(distances []ds) {
+	slices.SortFunc(distances, func(a, b ds) int {
+		return cmp.Compare(b.distance, a.distance)
+	})
 }
