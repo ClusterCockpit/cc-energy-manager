@@ -58,6 +58,7 @@ type wqrOptimizer struct {
 	current         float64
 	startupState    int
 	rand            *rand.Rand
+	enableDebug     bool
 }
 
 const (
@@ -74,6 +75,7 @@ func NewWQROptimizer(config json.RawMessage) (*wqrOptimizer, error) {
 		WinMinSamples   int     `json:"winMinSamples"`
 		WinLimitSamples int     `json:"winMaxSamples"`
 		Deterministic   bool    `json:"deterministic"`
+		EnableDebug     bool    `json:"enableDebug"`
 	}{}
 
 	err := json.Unmarshal(config, &c)
@@ -87,6 +89,7 @@ func NewWQROptimizer(config json.RawMessage) (*wqrOptimizer, error) {
 		winMinWidth:     c.WinMinWidth,
 		winMinSamples:   c.WinMinSamples,
 		winLimitSamples: c.WinLimitSamples,
+		enableDebug:     c.EnableDebug,
 	}
 
 	if c.Deterministic {
@@ -141,6 +144,8 @@ func (o *wqrOptimizer) Start(pdp float64) (float64, bool) {
 func (o *wqrOptimizer) Update(pdp float64) float64 {
 	pos := o.InsertSample(o.current, pdp)
 
+	debugNote := ""
+
 	// Search for neighbouring samples to our current observed samples until:
 	// - winMinSamples is reached and minMinWidth is reached (latter only if enough samples are available)
 	winLeftIndex := pos      // inclusive
@@ -154,7 +159,16 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		winRightPowerLimit = o.samples[winRightIndex-1].PowerLimit
 
 		enoughSamples := winRightIndex-winLeftIndex >= o.winMinSamples
-		enoughWidth := winRightPowerLimit - winLeftPowerLimit >= o.winMinWidth
+		enoughWidthLeft := o.current - winLeftPowerLimit >= o.winMinWidth/2.0
+		if o.current - o.lowerBound < o.winMinWidth/2.0 {
+			enoughWidthLeft = true
+		}
+		enoughWidthRight := winRightPowerLimit - o.current >= o.winMinWidth/2.0
+		if o.upperBound - o.current < o.winMinWidth/2.0 {
+			enoughWidthRight = true
+		}
+		enoughWidth := enoughWidthLeft && enoughWidthRight
+		//enoughWidth := winRightPowerLimit - winLeftPowerLimit >= o.winMinWidth
 
 		if enoughSamples && enoughWidth {
 			break
@@ -201,12 +215,34 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 	// Randomly move a bit into the direction where there is the most space between samples.
 	// This hopefully avoids big gaps in the regression, which otherwise cause inaccuracies.
 	distances := o.GetSampleDistances()
-	distances = distances[winLeftIndex:winRightIndex]
-	SortSampleDistanceDescending(distances)
+	distancesSorted := distances[winLeftIndex:winRightIndex]
+	SortSampleDistanceDescending(distancesSorted)
 
 	distanceImbalanceCorrection := 0.0
-	if distances[0].distance > distances[len(distances)-1].distance * 3 {
-		distanceImbalanceCorrection += (0.5*o.rand.Float64()) * (o.samples[distances[0].index].PowerLimit - o.current)
+	for _, dist := range distancesSorted {
+		powerLimit := o.samples[dist.index].PowerLimit
+		if dist.index - 1 < 0 || dist.index + 1 >= len(o.samples) {
+			continue
+		}
+		if dist.index - 1 < winLeftIndex || dist.index + 1 >= winRightIndex {
+			continue
+		}
+		powerLimitPrev := o.samples[dist.index - 1].PowerLimit
+		powerLimitNext := o.samples[dist.index + 1].PowerLimit
+		dPrev := powerLimit - powerLimitPrev
+		dNext := powerLimitNext - powerLimit
+
+		if dPrev >= dNext * 4.0 {
+			distanceImbalanceCorrection += (0.75*o.rand.Float64()) * (o.samples[dist.index - 1].PowerLimit - o.current)
+			break
+		} else if dPrev * 4.0 <= dNext {
+			distanceImbalanceCorrection += (0.75*o.rand.Float64()) * (o.samples[dist.index + 1].PowerLimit - o.current)
+			break
+		}
+	}
+
+	if math.Abs(distanceImbalanceCorrection) > 0.0 {
+		debugNote += fmt.Sprintf(" imbalance corrected (%f)", distanceImbalanceCorrection)
 	}
 
 	o.CleanupOldSamples(winLeftIndex, winRightIndex)
@@ -227,9 +263,11 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		if yl < yr {
 			o.current = o.current - 0.5*(o.current-winLeftPowerLimit)
 			randomize = 0.05
-		} else if b < 0.0 {
+			debugNote += " moving to left"
+		} else if yl > yr {
 			o.current = o.current + 0.5*(winRightPowerLimit-o.current)
 			randomize = 0.05
+			debugNote += " moving to right"
 		}
 		o.current += (o.rand.Float64() - 0.5) * randomize * (o.upperBound - o.lowerBound)
 	} else {
@@ -237,8 +275,13 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		// min(ax^2 + bx + c) = solve(2ax + b == 0)
 		//   = solve(2ax == -b) = solve(x == -b/2a) = -b/2a
 		o.current = -b / (2.0 * a)
-		o.current += (0.1*o.rand.Float64() - 0.05) * (winRightPowerLimit - winLeftPowerLimit)
-		o.current += distanceImbalanceCorrection
+		debugNote += fmt.Sprintf(" original minimum (%f)", o.current)
+		o.current += (0.05*o.rand.Float64() - 0.025) * (winRightPowerLimit - winLeftPowerLimit)
+		debugNote += fmt.Sprintf(" randomized minimum (%f)", o.current)
+		if winLeftPowerLimit < o.current && o.current < winRightPowerLimit {
+			o.current += distanceImbalanceCorrection
+		}
+		debugNote += fmt.Sprintf(" final minimum (%f)", o.current)
 	}
 
 	// If the result is outside of the bounds, limit it to the bounds.
@@ -251,13 +294,15 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		o.current = min(o.current, o.upperBound) - 0.025*o.rand.Float64()*(o.upperBound-o.lowerBound)
 	}
 
-	//nx := fmt.Sprintf("%f", x[0])
-	//ny := fmt.Sprintf("%f", y[0])
-	//for i := 1; i < len(x); i++ {
-	//	nx = fmt.Sprintf("%s,%f", nx, x[i])
-	//	ny = fmt.Sprintf("%s,%f", ny, y[i])
-	//}
-	//fmt.Printf("%.12f;%.12f;%.12f;%f;%f;%f;%d;%s;%s\n", a, b, c, winLeftPowerLimit, winRightPowerLimit, o.current, winRightIndex - winLeftIndex, nx, ny)
+	if o.enableDebug {
+		nx := fmt.Sprintf("%f", x[0])
+		ny := fmt.Sprintf("%f", y[0])
+		for i := 1; i < len(x); i++ {
+			nx = fmt.Sprintf("%s,%f", nx, x[i])
+			ny = fmt.Sprintf("%s,%f", ny, y[i])
+		}
+		fmt.Printf("%.12f;%.12f;%.12f;%f;%f;%f;%d;%s;%s;%s\n", a, b, c, winLeftPowerLimit, winRightPowerLimit, o.current, winRightIndex - winLeftIndex, nx, ny, debugNote)
+	}
 
 	return o.current
 }
