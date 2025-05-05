@@ -24,8 +24,8 @@ var testconfig string = `{
 	"upperBound": 400,
 	"winMinWidth": 50,
 	"winMinSamples": 5,
-	"winMaxSamples": 10,
-	"enableDebug": true,
+	"winMaxSamples": 30,
+	"enableDebug": false,
 	"deterministic": true
 }`
 
@@ -165,7 +165,7 @@ func TestWQRFiretarter(t *testing.T) {
 	//fmt.Printf("[ W2] newLimit=%f\n", newLimit)
 	newLimit, _ = o.Start(ProbeSample(t, samples, newLimit))
 
-	for i := 0; i < 15; i++ {
+	for i := 0; i < 100; i++ {
 		newLimit = o.Update(ProbeSample(t, samples, newLimit))
 		//fmt.Printf("[%3d] newLimit=%f\n", i, newLimit)
 	}
