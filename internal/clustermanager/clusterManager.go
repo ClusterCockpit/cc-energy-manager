@@ -262,7 +262,9 @@ func (cm *clusterManager) processMetric(msg lp.CCMessage) {
 
 	subClusterId, err := cm.GetSubClusterIdForHost(hostname)
 	if err != nil {
-		cclog.ComponentError("ClusterManager", "Unable to determine cluster/subcluster for host '%s': %s", hostname, err)
+		// Even on loglevel debug, this causes a lot of noise if a host is not managed by us.
+		// Perhaps we want to add an explicit ignore list, which would make misconfiguration less likely.
+		//cclog.ComponentError("ClusterManager", "Unable to determine cluster/subcluster for host '%s': %s", hostname, err)
 		return
 	}
 
