@@ -27,6 +27,8 @@ type gssOptimizerConfig struct {
 		Lower int `json:"lower"`
 		Upper int `json:"upper"`
 	} `json:"borders,omitempty"`
+	BroadenLimit int     `json:"count"`
+	FudgeFactor  float64 `json:"fudgeFactor"`
 }
 
 //  |<-----    h    ----->|
@@ -50,6 +52,8 @@ type gssOptimizer struct {
 	counter      int
 	mode         Mode
 	probe        float64
+	broadenLimit int
+	fudgeFactor  float64
 }
 
 var (
@@ -97,7 +101,7 @@ func (o *gssOptimizer) IsConverged() bool {
 }
 
 func (o *gssOptimizer) Update(fx float64) float64 {
-	offset := fx * 0.05
+	offset := fx * o.fudgeFactor
 	switch {
 	case o.c == o.probe:
 		cclog.Debugf("Set fc to %f", fx)
@@ -125,7 +129,7 @@ func (o *gssOptimizer) Update(fx float64) float64 {
 		// -       -   -       -
 		// |
 		// Probe
-		o.counter = 10 // Lets hope we find the new minimum within 10 iterations if there is any
+		o.counter = o.broadenLimit // Lets hope we find the new minimum within 10 iterations if there is any
 		o.fc = nan
 		o.probe = o.a
 		o.mode = BroadenDown
@@ -142,7 +146,7 @@ func (o *gssOptimizer) Update(fx float64) float64 {
 		// -       -   -       -
 		//                     |
 		//                     Probe
-		o.counter = 10 // Lets hope we find the new minimum within 10 iterations if there is any
+		o.counter = o.broadenLimit // Lets hope we find the new minimum within 10 iterations if there is any
 		o.fd = nan
 		o.probe = o.b
 		o.mode = BroadenUp
@@ -168,6 +172,7 @@ func (o *gssOptimizer) DumpState(position string) {
 	cclog.Debugf("\tfc(%f): %f", o.c, o.fc)
 	cclog.Debugf("\tfd(%f): %f", o.d, o.fd)
 	cclog.Debugf("\tfb(%f): %f", o.b, o.fb)
+	cclog.Debugf("\tcounter: %d", o.counter)
 }
 
 func (o *gssOptimizer) contractTowardsHigher() {
@@ -269,6 +274,10 @@ func (o *gssOptimizer) BroadenDown() float64 {
 		return o.probe
 	}
 
+	if math.IsNaN(o.fa) {
+		cclog.Errorf("cannot compare against 'fa', which is NaN")
+	}
+
 	if o.fa < o.fc && o.h < o.hMax { // minimum still outside, further expand
 		// Before:
 		//              *-------*---*-------*
@@ -310,6 +319,10 @@ func (o *gssOptimizer) BroadenUp() float64 {
 		o.broadenUp()
 		cclog.Debugf("\t initial broaden up: %f", o.probe)
 		return o.probe
+	}
+
+	if math.IsNaN(o.fb) {
+		cclog.Errorf("cannot compare against 'fb', which is NaN")
 	}
 
 	if o.fb < o.fd && o.h < o.hMax { // minimum still outside, further expand
@@ -371,6 +384,8 @@ func NewGssOptimizer(config json.RawMessage) (*gssOptimizer, error) {
 		probe:        nan,
 		hMax:         float64(c.Borders.Upper-c.Borders.Lower) * 0.5,
 		tol:          float64(c.Tolerance),
+		broadenLimit: c.BroadenLimit,
+		fudgeFactor:  c.FudgeFactor,
 	}
 
 	return &o, err
