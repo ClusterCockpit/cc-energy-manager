@@ -46,6 +46,7 @@ type JobManager struct {
 	deviceType        string
 	warmUpIterCount   int
 	warmUpDone        bool
+	startTime         time.Time
 }
 
 func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessage) (*JobManager, error) {
@@ -199,6 +200,12 @@ func (j *JobManager) Start() {
 		j.warmUpDone = false
 		j.warmUpIterCount = 0
 
+		// Unfortunately we don't know the true start time of the job, so we have to manually
+		// measure the start time. Though, in practice they shouldn't differ by much.
+		// We only use this to cleanup old jobs, where the stop event was missed.
+		// So it's not really tragic that there is an inaccuracy.
+		j.startTime = time.Now()
+
 		for {
 			select {
 			case <-j.done:
@@ -219,6 +226,12 @@ func (j *JobManager) Start() {
 					j.UpdateWarmup(pdpPerTarget)
 				} else {
 					j.UpdateNormal(pdpPerTarget)
+				}
+
+				maxDuration := time.Duration(j.job.Walltime) * time.Second
+				if j.startTime.Add(maxDuration).Before(time.Now()) {
+					j.Debug("Job exceeded maximum walltime. Stopping job manager...")
+					j.done <- struct{}{}
 				}
 			}
 		}
