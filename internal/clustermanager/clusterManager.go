@@ -164,6 +164,52 @@ func (cm *clusterManager) StopJob(stopJobData ccspecs.BaseJob) {
 	}
 }
 
+func (cm *clusterManager) cleanupCollidingJobs(job *Job) {
+	jobsToStop := make(map[int64]*ccspecs.BaseJob, 0)
+
+	// Because jobs cannot cross multiple clusters, we only have to check
+	// for overlapping resources on the same cluster.
+	existingResources := make(map[string]*ccspecs.BaseJob)
+	for _, runningJob := range cm.clusters[job.data.Cluster].jobIdToJob {
+		for _, runningJobResource := range runningJob.data.Resources {
+			// hwthreads
+			for _, hwthread := range runningJobResource.HWThreads {
+				resourceString := fmt.Sprintf("%s:hwt:%d", runningJobResource.Hostname, hwthread)
+				existingResources[resourceString] = &runningJob.data
+			}
+			// accelerators
+			for _, accelerator := range runningJobResource.Accelerators {
+				resourceString := fmt.Sprintf("%s:acc:%s", runningJobResource.Hostname, accelerator)
+				existingResources[resourceString] = &runningJob.data
+			}
+		}
+	}
+
+	for _, newJobResource := range job.data.Resources {
+		for _, hwthread := range newJobResource.HWThreads {
+			resourceString := fmt.Sprintf("%s:hwt:%d", newJobResource.Hostname, hwthread)
+			if job, ok := existingResources[resourceString]; ok {
+				jobsToStop[job.JobID] = job
+			}
+		}
+		for _, accelerator := range newJobResource.Accelerators {
+			resourceString := fmt.Sprintf("%s:acc:%s", newJobResource.Hostname, accelerator)
+			if job, ok := existingResources[resourceString]; ok {
+				jobsToStop[job.JobID] = job
+			}
+		}
+	}
+
+	if len(jobsToStop) > 0 {
+		cclog.ComponentWarn("ClusterManager", "Cleaning up old jobs, which collide with new job:")
+
+		for _, job := range jobsToStop {
+			cclog.ComponentWarn("ClusterManager", "- [%s] %d", job.Cluster, job.JobID)
+			cm.StopJob(ccspecs.BaseJob{JobID: job.JobID, Cluster: job.Cluster})
+		}
+	}
+}
+
 func (cm *clusterManager) registerJobManager(job *Job, deviceType string) {
 	cluster := cm.clusters[job.data.Cluster]
 	subCluster := cluster.subClusters[job.data.SubCluster]
@@ -229,6 +275,10 @@ func (cm *clusterManager) StartJob(startJobData ccspecs.BaseJob) {
 		}
 		jobs[job.data.JobID] = job
 	}
+
+	// If there already is a job running, which manages a resource, which
+	// this new job is supposed to manage, stop that job.
+	cm.cleanupCollidingJobs(job)
 
 	// Start job for CPU Socket optimization
 	for deviceType := range subCluster.deviceTypeToOptimizerConfig {
