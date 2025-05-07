@@ -264,7 +264,9 @@ func (cm *clusterManager) StartJob(startJobData ccspecs.BaseJob) {
 		data:               startJobData,
 	}
 
-	cluster.jobIdToJob[job.data.JobID] = job
+	// If there already is a job running, which manages a resource, which
+	// this new job is supposed to manage, stop that job.
+	cm.cleanupCollidingJobs(job)
 
 	// Register association between hostnames and Job IDs.
 	for _, r := range job.data.Resources {
@@ -276,9 +278,7 @@ func (cm *clusterManager) StartJob(startJobData ccspecs.BaseJob) {
 		jobs[job.data.JobID] = job
 	}
 
-	// If there already is a job running, which manages a resource, which
-	// this new job is supposed to manage, stop that job.
-	cm.cleanupCollidingJobs(job)
+	cluster.jobIdToJob[job.data.JobID] = job
 
 	// Start job for CPU Socket optimization
 	for deviceType := range subCluster.deviceTypeToOptimizerConfig {
