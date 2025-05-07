@@ -45,7 +45,7 @@ type SamplePoint struct {
 
 type ds struct {
 	distance float64
-	index int
+	index    int
 }
 
 type wqrOptimizer struct {
@@ -159,12 +159,12 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		winRightPowerLimit = o.samples[winRightIndex-1].PowerLimit
 
 		enoughSamples := winRightIndex-winLeftIndex >= o.winMinSamples
-		enoughWidthLeft := o.current - winLeftPowerLimit >= o.winMinWidth/2.0
-		if o.current - o.lowerBound < o.winMinWidth/2.0 {
+		enoughWidthLeft := o.current-winLeftPowerLimit >= o.winMinWidth/2.0
+		if o.current-o.lowerBound < o.winMinWidth/2.0 {
 			enoughWidthLeft = true
 		}
-		enoughWidthRight := winRightPowerLimit - o.current >= o.winMinWidth/2.0
-		if o.upperBound - o.current < o.winMinWidth/2.0 {
+		enoughWidthRight := winRightPowerLimit-o.current >= o.winMinWidth/2.0
+		if o.upperBound-o.current < o.winMinWidth/2.0 {
 			enoughWidthRight = true
 		}
 		enoughWidth := enoughWidthLeft && enoughWidthRight
@@ -221,22 +221,22 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 	distanceImbalanceCorrection := 0.0
 	for _, dist := range distancesSorted {
 		powerLimit := o.samples[dist.index].PowerLimit
-		if dist.index - 1 < 0 || dist.index + 1 >= len(o.samples) {
+		if dist.index-1 < 0 || dist.index+1 >= len(o.samples) {
 			continue
 		}
-		if dist.index - 1 < winLeftIndex || dist.index + 1 >= winRightIndex {
+		if dist.index-1 < winLeftIndex || dist.index+1 >= winRightIndex {
 			continue
 		}
-		powerLimitPrev := o.samples[dist.index - 1].PowerLimit
-		powerLimitNext := o.samples[dist.index + 1].PowerLimit
+		powerLimitPrev := o.samples[dist.index-1].PowerLimit
+		powerLimitNext := o.samples[dist.index+1].PowerLimit
 		dPrev := powerLimit - powerLimitPrev
 		dNext := powerLimitNext - powerLimit
 
-		if dPrev >= dNext * 4.0 {
-			distanceImbalanceCorrection += (0.75*o.rand.Float64()) * (o.samples[dist.index - 1].PowerLimit - o.current)
+		if dPrev >= dNext*4.0 {
+			distanceImbalanceCorrection += (0.75 * o.rand.Float64()) * (o.samples[dist.index-1].PowerLimit - o.current)
 			break
-		} else if dPrev * 4.0 <= dNext {
-			distanceImbalanceCorrection += (0.75*o.rand.Float64()) * (o.samples[dist.index + 1].PowerLimit - o.current)
+		} else if dPrev*4.0 <= dNext {
+			distanceImbalanceCorrection += (0.75 * o.rand.Float64()) * (o.samples[dist.index+1].PowerLimit - o.current)
 			break
 		}
 	}
@@ -253,12 +253,12 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 		// Not sure if the polyfit library is supposed to do that, but it does.
 		// I assume this may occur due to numerical instability. Just move around
 		// randomly a bit in this case.
-		o.current += (o.rand.Float64() * 0.1 - 0.05) * (o.upperBound - o.lowerBound)
+		o.current += (o.rand.Float64()*0.1 - 0.05) * (o.upperBound - o.lowerBound)
 	} else if a <= 0.0 {
 		// If a is negative, we can't search a minimum. Instead, we use the slope
 		// between the window borders to determine a search direction.
-		yl := a * (winLeftPowerLimit * winLeftPowerLimit) + b * winLeftPowerLimit + c
-		yr := a * (winRightPowerLimit * winRightPowerLimit) + b * winRightPowerLimit + c
+		yl := a*(winLeftPowerLimit*winLeftPowerLimit) + b*winLeftPowerLimit + c
+		yr := a*(winRightPowerLimit*winRightPowerLimit) + b*winRightPowerLimit + c
 		randomize := 0.2
 		if yl < yr {
 			o.current = o.current - 0.5*(o.current-winLeftPowerLimit)
@@ -301,7 +301,7 @@ func (o *wqrOptimizer) Update(pdp float64) float64 {
 			nx = fmt.Sprintf("%s,%f", nx, x[i])
 			ny = fmt.Sprintf("%s,%f", ny, y[i])
 		}
-		fmt.Printf("%.12f;%.12f;%.12f;%f;%f;%f;%d;%s;%s;%s\n", a, b, c, winLeftPowerLimit, winRightPowerLimit, o.current, winRightIndex - winLeftIndex, nx, ny, debugNote)
+		fmt.Printf("%.12f;%.12f;%.12f;%f;%f;%f;%d;%s;%s;%s\n", a, b, c, winLeftPowerLimit, winRightPowerLimit, o.current, winRightIndex-winLeftIndex, nx, ny, debugNote)
 	}
 
 	return o.current
@@ -344,7 +344,7 @@ func (o *wqrOptimizer) CleanupOldSamples(leftIndex, rightIndex int) {
 
 	// exclude values outside the desired window from deletion
 	indicesToRemove = slices.DeleteFunc(indicesToRemove, func(index int) bool {
-		return math.Abs(o.samples[index].PowerLimit - o.current) > o.winMinWidth / 2
+		return math.Abs(o.samples[index].PowerLimit-o.current) > o.winMinWidth/2
 	})
 
 	//fmt.Printf("e distances: %+v\n", distances)
@@ -385,7 +385,6 @@ func PolyFit(x, y []float64, degree int) ([]float64, error) {
 	b := mat.NewDense(len(y), 1, y)
 	c := mat.NewDense(d, 1, nil)
 
-
 	var qr mat.QR
 	qr.Factorize(a)
 
@@ -418,7 +417,7 @@ func (o *wqrOptimizer) GetSampleDistances() []ds {
 			dr = o.samples[i+1].PowerLimit - o.samples[i].PowerLimit
 		}
 
-		distances[i].distance = dl + dr + 0.01 * (o.rand.Float64() - 0.5) * (o.upperBound - o.lowerBound)
+		distances[i].distance = dl + dr + 0.01*(o.rand.Float64()-0.5)*(o.upperBound-o.lowerBound)
 		distances[i].index = i
 	}
 	return distances

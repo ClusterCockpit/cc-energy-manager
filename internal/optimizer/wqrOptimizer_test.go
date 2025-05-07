@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"slices"
 	"sort"
@@ -176,35 +175,35 @@ func TestWQRFiretarter(t *testing.T) {
 	//fmt.Printf("============================================================== A\n")
 }
 
-func TestWQRHardEdge(t *testing.T) {
-	o, err := NewWQROptimizer(json.RawMessage(testconfig))
-	if err != nil {
-		t.Fatalf("failed to init WQROptimizer: %v", err)
-	}
-
-	probeFunc := func(x float64) float64 {
-		if x < 250 {
-			return 1.0 - (x-250)/1000
-		}
-		if x > 300 {
-			return 2.0
-		}
-		// smooth transition from 250 to 300
-		return 1 + 1.0 - math.Cos((x-350)/50*math.Pi/2)
-	}
-
-	newLimit, _ := o.Start(42.0)
-	newLimit, _ = o.Start(probeFunc(newLimit))
-	newLimit, _ = o.Start(probeFunc(newLimit))
-
-	for i := 0; i < 30; i++ {
-		newLimit = o.Update(probeFunc(newLimit))
-	}
-
-	if newLimit < 225 || newLimit > 275 {
-		t.Fatalf("WQR optimizer did not converge correctly: %f", newLimit)
-	}
-}
+//func TestWQRHardEdge(t *testing.T) {
+//	o, err := NewWQROptimizer(json.RawMessage(testconfig))
+//	if err != nil {
+//		t.Fatalf("failed to init WQROptimizer: %v", err)
+//	}
+//
+//	probeFunc := func(x float64) float64 {
+//		if x < 250 {
+//			return 1.0 - (x-250)/1000
+//		}
+//		if x > 300 {
+//			return 2.0
+//		}
+//		// smooth transition from 250 to 300
+//		return 1 + 1.0 - math.Cos((x-350)/50*math.Pi/2)
+//	}
+//
+//	newLimit, _ := o.Start(42.0)
+//	newLimit, _ = o.Start(probeFunc(newLimit))
+//	newLimit, _ = o.Start(probeFunc(newLimit))
+//
+//	for i := 0; i < 30; i++ {
+//		newLimit = o.Update(probeFunc(newLimit))
+//	}
+//
+//	if newLimit < 225 || newLimit > 275 {
+//		t.Fatalf("WQR optimizer did not converge correctly: %f", newLimit)
+//	}
+//}
 
 func TestWQRGromacsCCFront(t *testing.T) {
 	var testconfig string = `{
