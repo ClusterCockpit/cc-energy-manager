@@ -27,7 +27,9 @@ var (
 
 func TestInit(t *testing.T) {
 	testconfig := `{
-      "tol": 10,
+      "tolerance": 2,
+      "count": 2,
+      "fudgeFactor": 0.05,
       "borders": {
         "lower": 20,
         "upper": 890
@@ -405,7 +407,9 @@ func TestInit(t *testing.T) {
 
 func TestUpperBarrierAndMove(t *testing.T) {
 	testconfig := `{
-         "tolerance": 2,
+         "tolerance": 1,
+         "count": 2,
+         "fudgeFactor": 0.05,
          "borders": {
            "lower": 20,
            "upper": 500

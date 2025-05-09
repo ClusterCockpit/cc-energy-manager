@@ -146,7 +146,7 @@ func (o *gssOptimizer) Update(fx float64) float64 {
 		// -       -   -       -
 		//                     |
 		//                     Probe
-		o.counter = o.broadenLimit // Lets hope we find the new minimum within 10 iterations if there is any
+		o.counter = o.broadenLimit
 		o.fd = nan
 		o.probe = o.b
 		o.mode = BroadenUp
@@ -265,7 +265,14 @@ func (o *gssOptimizer) Narrow() float64 {
 
 func (o *gssOptimizer) BroadenDown() float64 {
 	if o.counter > 0 {
-		o.counter--
+		if o.counter == 1 {
+			o.contractTowardsLower()
+			o.mode = Narrow
+			o.counter--
+			return o.probe
+		} else {
+			o.counter--
+		}
 	}
 
 	if math.IsNaN(o.fc) {
@@ -312,7 +319,14 @@ func (o *gssOptimizer) BroadenDown() float64 {
 
 func (o *gssOptimizer) BroadenUp() float64 {
 	if o.counter > 0 {
-		o.counter--
+		if o.counter == 1 {
+			o.contractTowardsHigher()
+			o.mode = Narrow
+			o.counter--
+			return o.probe
+		} else {
+			o.counter--
+		}
 	}
 
 	if math.IsNaN(o.fd) {
