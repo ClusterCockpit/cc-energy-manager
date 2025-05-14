@@ -372,30 +372,32 @@ func (o *wqrOptimizer) DeleteSamplesAtIndices(indicesToRemove []int) {
 	//fmt.Printf("samples after: %+v\n", o.samples)
 }
 
-func PolyFit(x, y []float64, degree int) ([]float64, error) {
+func PolyFit(x_values, y_values []float64, degree int) ([]float64, error) {
 	// Based on this example:
 	// https://github.com/gonum/gonum/issues/1759#issuecomment-1005668867
-	d := degree + 1
-	a := mat.NewDense(len(x), d, nil)
-	for i := range x {
-		for j, p := 0, 1.; j < d; j, p = j+1, p*x[i] {
-			a.Set(i, j, p)
+	A := mat.NewDense(len(x_values), degree+1, nil)
+	for i := range x_values {
+		for j, p := 0, 1.; j < degree+1; j, p = j+1, p*x_values[i] {
+			A.Set(i, j, p)
 		}
 	}
-	b := mat.NewDense(len(y), 1, y)
-	c := mat.NewDense(d, 1, nil)
+	b := mat.NewDense(len(y_values), 1, y_values)
+	x := mat.NewDense(degree+1, 1, nil)
 
+	// factorize
 	var qr mat.QR
-	qr.Factorize(a)
+	qr.Factorize(A)
 
-	retval := make([]float64, d)
-	err := qr.SolveTo(c, false, b)
+	// solve to x
+	retval := make([]float64, degree+1)
+	err := qr.SolveTo(x, false, b)
 	if err != nil {
 		return retval, fmt.Errorf("Unable to fit curve: %w", err)
 	}
 
-	for i := 0; i < d; i++ {
-		retval[i] = c.At(i, 0)
+	// return results
+	for i := 0; i < degree+1; i++ {
+		retval[i] = x.At(i, 0)
 	}
 	return retval, nil
 }
