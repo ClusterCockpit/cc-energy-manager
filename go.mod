@@ -7,7 +7,8 @@ toolchain go1.24.0
 require (
 	github.com/ClusterCockpit/cc-lib v0.2.0
 	github.com/ClusterCockpit/cc-node-controller v0.0.0-20250328152327-c64fc460fdd2
-	gonum.org/v1/gonum v0.8.1
+	github.com/mihonen/polynomials v0.0.0-20250110153029-df0a762357ad
+	gonum.org/v1/gonum v0.12.0
 )
 
 require (
