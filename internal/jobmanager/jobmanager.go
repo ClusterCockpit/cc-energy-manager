@@ -59,13 +59,18 @@ func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessag
 		return nil, err
 	}
 
+	agg, err := aggregator.New(cfg.AggCfg)
+	if err != nil {
+		return nil, err
+	}
+
 	j := JobManager{
 		done:              make(chan struct{}),
 		started:           false,
 		targetToOptimizer: make(map[aggregator.Target]optimizer.Optimizer),
 		targetToDevices:   make(map[aggregator.Target][]aggregator.Target),
 		cfg:               cfg,
-		aggregator:        aggregator.New(cfg.AggCfg),
+		aggregator:        agg,
 		job:               job,
 		deviceType:        deviceType,
 	}

@@ -28,29 +28,23 @@ type Target struct {
 	DeviceId string
 }
 
-func New(rawConfig json.RawMessage) Aggregator {
-	var err error
-	var ag Aggregator
-
+func New(rawConfig json.RawMessage) (Aggregator, error) {
 	var cfg struct {
 		Type string `json:"type"`
 	}
 
-	if err = json.Unmarshal(rawConfig, &cfg); err != nil {
-		cclog.Warn("Error while unmarshaling raw config json")
-		return nil
+	if err := json.Unmarshal(rawConfig, &cfg); err != nil {
+		return nil, fmt.Errorf("Error while unmarshaling raw config JSON: %v", err)
 	}
 
 	switch cfg.Type {
 	case "last":
-		ag, _ = NewLastAggregator(rawConfig)
+		return NewLastAggregator(rawConfig)
 	case "median":
-		ag, _ = NewMedianAggregator(rawConfig)
+		return NewMedianAggregator(rawConfig)
 	default:
-		cclog.Errorf("Unknown aggregator %s", cfg.Type)
+		return nil, fmt.Errorf("Unknown aggregator %s", cfg.Type)
 	}
-
-	return ag
 }
 
 func valueToFloat64(value any) (float64, error) {
