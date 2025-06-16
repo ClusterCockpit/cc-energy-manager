@@ -173,6 +173,7 @@ func (o *gssOptimizer) DumpState(position string) {
 	cclog.Debugf("\tfd(%f): %f", o.d, o.fd)
 	cclog.Debugf("\tfb(%f): %f", o.b, o.fb)
 	cclog.Debugf("\tcounter: %d", o.counter)
+	cclog.Debugf("\tmode: %d", int(o.mode))
 }
 
 func (o *gssOptimizer) contractTowardsHigher() {
@@ -203,6 +204,12 @@ func (o *gssOptimizer) broadenUp() {
 
 func (o *gssOptimizer) Narrow() float64 {
 	o.counter = 0
+	if math.IsNaN(o.fc) {
+		fmt.Printf("fc NAN\n")
+	}
+	if math.IsNaN(o.fd) {
+		fmt.Printf("fd NAN\n")
+	}
 	if o.fc < o.fd {
 		if o.h < o.tol { // expand toward lower: c becomes new d and a becomes new c, new probe a
 			// Set fc to nan to not get stuck with old function value
