@@ -230,7 +230,7 @@ func (j *JobManager) Start() {
 
 				maxDuration := time.Duration(j.job.Walltime) * time.Second
 				if j.job.Walltime > 0 && j.startTime.Add(maxDuration).Before(time.Now()) {
-					j.Debug("Job exceeded maximum walltime. Stopping job manager...")
+					j.Debug("Job exceeded maximum walltime (%v). Stopping job manager...", j.job.Walltime)
 					j.done <- struct{}{}
 				}
 			}
