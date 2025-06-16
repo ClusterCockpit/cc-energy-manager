@@ -166,7 +166,7 @@ func (o *gssngOptimizer) TryNarrow() bool {
 			return false
 		} else {
 			o.retriesCount += 1
-			o.InvalidateInner()
+			o.InvalidateAll()
 			return true
 		}
 	}
