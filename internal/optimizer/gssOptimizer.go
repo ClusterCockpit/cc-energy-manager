@@ -27,7 +27,7 @@ type gssOptimizerConfig struct {
 		Lower int `json:"lower"`
 		Upper int `json:"upper"`
 	} `json:"borders,omitempty"`
-	BroadenLimit int     `json:"count"`
+	BroadenLimit int     `json:"broadenLimit"`
 	FudgeFactor  float64 `json:"fudgeFactor"`
 }
 
