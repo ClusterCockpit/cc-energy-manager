@@ -12,6 +12,7 @@ import (
 type Optimizer interface {
 	Start(float64) (float64, bool)
 	Update(float64) float64
+	//SetBorders(float64, float64)
 }
 
 func NewOptimizer(rawConfig json.RawMessage) (Optimizer, error) {
@@ -26,6 +27,8 @@ func NewOptimizer(rawConfig json.RawMessage) (Optimizer, error) {
 	switch cfg.Type {
 	case "gss":
 		return NewGssOptimizer(rawConfig)
+	case "gssng":
+		return NewGssNgOptimizer(rawConfig)
 	case "trace":
 		return NewTraceOptimizer(rawConfig)
 	case "test":
