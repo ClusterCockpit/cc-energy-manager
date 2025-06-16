@@ -24,7 +24,7 @@ const (
 )
 
 type sample struct {
-	// age        int TODO
+	// age        int //TODO discard sample y if the sample is too old
 	x float64
 	y float64
 }
@@ -40,6 +40,8 @@ type gssngOptimizer struct {
 	retriesCount int
 	borderLower  float64
 	borderUpper  float64
+	validSampleMin float64
+	validSampleMax float64
 	fudgeFactor  float64
 }
 
@@ -155,7 +157,7 @@ func (o *gssngOptimizer) TryNarrow() bool {
 
 	// Detect whether we can narrow our GSS or not.
 	// In order to do so, y curve must be unimodal.
-	if !o.IsUnimodal() {
+	if !o.IsUnimodal() || !o.AllSamplesValidRange() {
 		// We cannot continue with GSS at this point, because a gss assumes an unimodal function.
 		// Instead, we first try to retry measuring the inner two values.
 		// If that doesn't change the situation, we instead broaden later after a couple of retries.
@@ -331,6 +333,17 @@ func (o *gssngOptimizer) IsUnimodal() bool {
 	return false
 }
 
+func (o *gssngOptimizer) AllSamplesValidRange() bool {
+	samples := []float64{o.lowerOuter.y, o.lowerInner.y, o.upperInner.y, o.upperOuter.y}
+	for _, s := range samples {
+		if s < o.validSampleMin || s > o.validSampleMax {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (o *gssngOptimizer) AllSamplesValid() bool {
 	if o.lowerOuter.y <= 0.0 || o.lowerInner.y <= 0.0 || o.upperInner.y <= 0.0 || o.upperOuter.y < 0.0 {
 		return false
@@ -345,6 +358,8 @@ func NewGssNgOptimizer(config json.RawMessage) (*gssngOptimizer, error) {
 			Lower float64 `json:"lower"`
 			Upper float64 `json:"upper"`
 		} `json:"borders,omitempty"`
+		ValidSampleMin float64 `json:"validSampleMin"`
+		ValidSampleMax float64 `json:"validSampleMax"`
 		FudgeFactor  float64 `json:"fudgeFactor"`
 		RetriesMax int `json:"retriesMax"`
 	}
@@ -354,6 +369,8 @@ func NewGssNgOptimizer(config json.RawMessage) (*gssngOptimizer, error) {
 	c.Borders.Upper = 500
 	c.RetriesMax = 3
 	c.FudgeFactor = 0.0
+	c.ValidSampleMin = 0
+	c.ValidSampleMax = 1000000000
 
 	err := json.Unmarshal(config, &c)
 	if err != nil {
