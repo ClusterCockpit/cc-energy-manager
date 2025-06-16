@@ -334,6 +334,9 @@ func (o *gssngOptimizer) IsUnimodal() bool {
 }
 
 func (o *gssngOptimizer) AllSamplesValidRange() bool {
+	// If samples are not in the configured range, we reject them.
+	// This prevents the case (e.g. during idle loads), where extreme samples are observed.
+	// Those are then forcefully rejected and cause a Broaden.
 	samples := []float64{o.lowerOuter.y, o.lowerInner.y, o.upperInner.y, o.upperOuter.y}
 	for _, s := range samples {
 		if s < o.validSampleMin || s > o.validSampleMax {
@@ -402,6 +405,8 @@ func NewGssNgOptimizer(config json.RawMessage) (*gssngOptimizer, error) {
 		retriesCount: 0,
 		borderLower: c.Borders.Lower,
 		borderUpper: c.Borders.Upper,
+		validSampleMin: c.ValidSampleMin,
+		validSampleMax: c.ValidSampleMax,
 		fudgeFactor: c.FudgeFactor,
 	}
 
