@@ -150,6 +150,12 @@ func (o *gssngOptimizer) TryNarrow() bool {
 	// This function shall returns false if narrowing is not possible, and broaden should
 	// be attempted instead.
 
+	// If samples a sample is valid but out of range, fail. This allows to quickly broaden
+	// in case there is not enough load on the machine.
+	if !o.AllSamplesValidRange() {
+		return false
+	}
+
 	// do we have all required values? If not, delay narrow until they are all there
 	if !o.AllSamplesValid() {
 		return true
@@ -157,7 +163,7 @@ func (o *gssngOptimizer) TryNarrow() bool {
 
 	// Detect whether we can narrow our GSS or not.
 	// In order to do so, y curve must be unimodal.
-	if !o.IsUnimodal() || !o.AllSamplesValidRange() {
+	if !o.IsUnimodal() {
 		// We cannot continue with GSS at this point, because a gss assumes an unimodal function.
 		// Instead, we first try to retry measuring the inner two values.
 		// If that doesn't change the situation, we instead broaden later after a couple of retries.
@@ -339,7 +345,7 @@ func (o *gssngOptimizer) AllSamplesValidRange() bool {
 	// Those are then forcefully rejected and cause a Broaden.
 	samples := []float64{o.lowerOuter.y, o.lowerInner.y, o.upperInner.y, o.upperOuter.y}
 	for _, s := range samples {
-		if s < o.validSampleMin || s > o.validSampleMax {
+		if s > 0.0 && (s < o.validSampleMin || s > o.validSampleMax) {
 			return false
 		}
 	}
