@@ -47,9 +47,10 @@ type JobManager struct {
 	warmUpIterCount   int
 	warmUpDone        bool
 	startTime         time.Time
+	ctrl              controller.Controller
 }
 
-func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessage) (*JobManager, error) {
+func NewJobManager(ctrl controller.Controller, deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessage) (*JobManager, error) {
 	var cfg jobManagerConfig
 
 	err := json.Unmarshal(rawCfg, &cfg)
@@ -73,6 +74,7 @@ func NewJobManager(deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessag
 		aggregator:        agg,
 		job:               job,
 		deviceType:        deviceType,
+		ctrl:              ctrl,
 	}
 
 	intervalSearch, err := time.ParseDuration(cfg.IntervalSearch)
@@ -127,7 +129,7 @@ func (j *JobManager) initScopeJob(rawCfg json.RawMessage) error {
 	devices := make([]aggregator.Target, 0)
 
 	for _, resource := range j.job.Resources {
-		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
+		for _, deviceId := range j.ctrl.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
 			devices = append(devices, aggregator.DeviceScopeTarget(resource.Hostname, deviceId))
 		}
 	}
@@ -148,7 +150,7 @@ func (j *JobManager) initScopeNode(rawCfg json.RawMessage) error {
 
 		devices := make([]aggregator.Target, 0)
 
-		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
+		for _, deviceId := range j.ctrl.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
 			devices = append(devices, aggregator.DeviceScopeTarget(resource.Hostname, deviceId))
 		}
 
@@ -160,7 +162,7 @@ func (j *JobManager) initScopeNode(rawCfg json.RawMessage) error {
 func (j *JobManager) initScopeDevice(rawCfg json.RawMessage) error {
 	var err error
 	for _, resource := range j.job.Resources {
-		for _, deviceId := range controller.Instance.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
+		for _, deviceId := range j.ctrl.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
 			/* Create one optimizer for each device on a host to optimize. */
 			target := aggregator.DeviceScopeTarget(resource.Hostname, deviceId)
 			j.targetToOptimizer[target], err = optimizer.NewOptimizer(rawCfg)
@@ -269,7 +271,7 @@ func (j *JobManager) UpdateWarmup(pdpPerTarget map[aggregator.Target]float64) {
 		j.Debug("%v: pdp=%f --> optimum=%f", target, pdp, optimum)
 
 		for _, device := range j.targetToDevices[target] {
-			controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimumStr)
+			j.ctrl.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimumStr)
 		}
 	}
 
@@ -293,7 +295,7 @@ func (j *JobManager) UpdateNormal(pdpPerTarget map[aggregator.Target]float64) {
 		j.Debug("%v: pdp=%f --> optimum=%s", target, pdp, optimum)
 
 		for _, device := range j.targetToDevices[target] {
-			controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimum)
+			j.ctrl.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimum)
 		}
 	}
 }
@@ -309,7 +311,7 @@ func (j *JobManager) ResetToDefault() {
 	j.Debug("Resetting device to default value...")
 	for target := range j.targetToOptimizer {
 		for _, device := range j.targetToDevices[target] {
-			controller.Instance.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, v)
+			j.ctrl.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, v)
 		}
 	}
 }
@@ -339,7 +341,7 @@ func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
 
 	for _, r := range j.job.Resources {
 		if r.Hostname == metricHost {
-			deviceIds := controller.Instance.GetDeviceIdsForResources(j.job.Cluster, deviceType, r)
+			deviceIds := j.ctrl.GetDeviceIdsForResources(j.job.Cluster, deviceType, r)
 
 			// If the metric's deviceId is present in the list of devices associated with this job manager,
 			// accept the message. If not, discard the message

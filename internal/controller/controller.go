@@ -17,8 +17,6 @@ import (
 	cccontrol "github.com/ClusterCockpit/cc-node-controller/pkg/ccControlClient"
 )
 
-var Instance Controller
-
 type Controller interface {
 	Set(cluster string, hostname string, deviceType string, deviceId string, control string, value string) error
 	GetDeviceIdsForResources(cluster string, deviceType string, resource *ccspecs.Resource) []string

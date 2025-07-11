@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/ClusterCockpit/cc-energy-manager/internal/jobmanager"
+	"github.com/ClusterCockpit/cc-energy-manager/internal/controller"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
 	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
@@ -49,6 +50,7 @@ type clusterManager struct {
 	wg                 sync.WaitGroup
 	input              chan lp.CCMessage
 	output             chan lp.CCMessage
+	ctrl               controller.Controller
 }
 
 type ClusterManager interface {
@@ -220,7 +222,7 @@ func (cm *clusterManager) registerJobManager(job *Job, deviceType string) {
 		return
 	}
 
-	jm, err := jobmanager.NewJobManager(deviceType, job.data, jobManagerConfig)
+	jm, err := jobmanager.NewJobManager(cm.ctrl, deviceType, job.data, jobManagerConfig)
 	if err != nil {
 		cclog.Errorf("Unable to create job manager: %v", err)
 		return
@@ -414,12 +416,13 @@ func (cm *clusterManager) Close() {
 	cclog.ComponentDebug("ClusterManager", "Stopped ClusterManager!")
 }
 
-func NewClusterManager(config json.RawMessage) (ClusterManager, error) {
+func NewClusterManager(ctrl controller.Controller, config json.RawMessage) (ClusterManager, error) {
 	cm := new(clusterManager)
 
 	cm.done = make(chan struct{})
 	cm.clusters = make(map[string]*Cluster)
 	cm.hostToSubClusterId = make(map[string]SubClusterId)
+	cm.ctrl = ctrl
 
 	clusterConfigs := make([]json.RawMessage, 0)
 	err := json.Unmarshal(config, &clusterConfigs)

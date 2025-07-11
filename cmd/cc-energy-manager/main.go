@@ -23,6 +23,7 @@ import (
 var (
 	SinkManager                            sinks.SinkManager
 	ReceiveManager                         receivers.ReceiveManager
+	Controller                             controller.Controller
 	ClustManager                           cmanager.ClusterManager
 	ShutdownWG                             sync.WaitGroup
 	flagOnce, flagVersion, flagLogDateTime bool
@@ -60,6 +61,10 @@ func shutdownHandler(shutdownSignal chan os.Signal) {
 		cclog.Debug("Shutdown ClusterManager...")
 		ClustManager.Close()
 	}
+	if Controller != nil {
+		cclog.Debug("Shutdown Controller...")
+		Controller.Close()
+	}
 
 	ShutdownWG.Done()
 }
@@ -93,19 +98,8 @@ func mainFunc() int {
 		return 1
 	}
 
-	if cfg := cfg.GetPackageConfig("clusters"); cfg != nil {
-		ClustManager, err = cmanager.NewClusterManager(cfg)
-		if err != nil {
-			cclog.Error(err.Error())
-			return 1
-		}
-	} else {
-		cclog.Error("Optimizer configuration must be present")
-		return 1
-	}
-
 	if cfg := cfg.GetPackageConfig("controller"); cfg != nil {
-		controller.Instance, err = controller.NewCcController(cfg)
+		Controller, err = controller.NewCcController(cfg)
 		if err != nil {
 			cclog.Error(err.Error())
 			return 1
@@ -114,7 +108,17 @@ func mainFunc() int {
 		cclog.Error("Controller configuration must be present")
 		return 1
 	}
-	defer controller.Instance.Close()
+
+	if cfg := cfg.GetPackageConfig("clusters"); cfg != nil {
+		ClustManager, err = cmanager.NewClusterManager(Controller, cfg)
+		if err != nil {
+			cclog.Error(err.Error())
+			return 1
+		}
+	} else {
+		cclog.Error("Optimizer configuration must be present")
+		return 1
+	}
 
 	// Create shutdown handler
 	shutdownSignal := make(chan os.Signal, 1)
