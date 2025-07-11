@@ -6,12 +6,13 @@ package optimizer
 
 import (
 	"encoding/json"
+	"math/rand"
 	"testing"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 )
 
-const loglevel = "info"
+const loglevel = "debug"
 
 var (
 	Reset  = "\033[0m"
@@ -311,99 +312,103 @@ func TestInit(t *testing.T) {
 // 	}
 // }
 
-// func TestUpperBarrier(t *testing.T) {
-// 	testconfig := `{
-//          "tolerance": 2,
-//          "borders": {
-//            "lower": 60,
-//            "upper": 600
-//          }}`
-//
-// 	cclog.Init(loglevel, false)
-// 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
-// 	if err != nil {
-// 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
-// 		return
-// 	}
-//
-// 	f := func(v float64) float64 {
-// 		x := float64(v)
-// 		y := -0.6*x + 600
-//
-// 		return y
-// 	}
-//
-// 	in := 400.0
-// 	var out float64
-// 	ok := false
-//
-// 	for !ok {
-// 		out, ok = o.Start(in)
-// 		in = f(out)
-// 	}
-// 	i := 0
-// 	cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
-// 	for {
-// 		out = o.Update(in)
-// 		in = f(out)
-//
-// 		if out > 660 {
-// 			t.Errorf("exceed upper barrier %d: %f", i, out)
-// 		}
-// 		if i > 70 {
-// 			break
-// 		}
-//
-// 		i++
-// 	}
-// }
-//
-// func TestNoise(t *testing.T) {
-// 	testconfig := `{
-//          "tolerance": 2,
-//          "borders": {
-//            "lower": 60,
-//            "upper": 600
-//          }}`
-//
-// 	cclog.Init(loglevel, false)
-// 	o, err := NewGssOptimizer(json.RawMessage(testconfig))
-// 	if err != nil {
-// 		t.Errorf("failed to init GssOptimizer: %v", err.Error())
-// 		return
-// 	}
-//
-// 	in := 100.0
-// 	var out float64
-// 	ok := false
-//
-// 	for !ok {
-// 		out, ok = o.Start(in)
-// 		in = 100
-// 	}
-// 	i := 0
-// 	cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
-// 	for {
-// 		out = o.Update(in)
-// 		noise := rand.Float64()*(in*0.1) - (in * 0.05)
-//
-// 		if out < 550 {
-// 			in = 100 + noise
-// 		} else {
-// 			in = 150 + noise
-// 		}
-//
-// 		if out > 600 {
-// 			t.Errorf("exceed upper barrier %d: %f", i, out)
-// 		}
-// 		if i > 70 {
-// 			break
-// 		}
-//
-// 		cclog.Infof("it %d in: %f out: %f\n", i, in, out)
-// 		i++
-// 	}
-// }
+func TestUpperBarrier(t *testing.T) {
+	testconfig := `{
+         "tolerance": 2,
+		 "broadenLimit": 4,
+		 "fudgeFactor": 0.05,
+         "borders": {
+           "lower": 60,
+           "upper": 600
+         }}`
+
+	cclog.Init(loglevel, false)
+	o, err := NewGssOptimizer(json.RawMessage(testconfig))
+	if err != nil {
+		t.Errorf("failed to init GssOptimizer: %v", err.Error())
+		return
+	}
+
+	f := func(v float64) float64 {
+		x := float64(v)
+		y := -0.6*x + 600
+
+		return y
+	}
+
+	in := 400.0
+	var out float64
+	ok := false
+
+	for !ok {
+		out, ok = o.Start(in)
+		in = f(out)
+	}
+	i := 0
+	cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
+	for {
+		out = o.Update(in)
+		in = f(out)
+
+		if out > 660 {
+			t.Errorf("exceed upper barrier %d: %f", i, out)
+		}
+		if i > 70 {
+			break
+		}
+
+		i++
+	}
+}
+
+func TestNoise(t *testing.T) {
+	testconfig := `{
+         "tolerance": 2,
+		 "broadenLimit": 4,
+		 "fudgeFactor": 0.05,
+         "borders": {
+           "lower": 60,
+           "upper": 600
+         }}`
+
+	cclog.Init(loglevel, false)
+	o, err := NewGssOptimizer(json.RawMessage(testconfig))
+	if err != nil {
+		t.Errorf("failed to init GssOptimizer: %v", err.Error())
+		return
+	}
+
+	in := 100.0
+	var out float64
+	ok := false
+
+	for !ok {
+		out, ok = o.Start(in)
+		in = 100
+	}
+	i := 0
+	cclog.Debugf("it %d in: %f out: %f\n", i, in, out)
+	for {
+		out = o.Update(in)
+		noise := rand.Float64()*(in*0.1) - (in * 0.05)
+
+		if out < 550 {
+			in = 100 + noise
+		} else {
+			in = 150 + noise
+		}
+
+		if out > 600 {
+			t.Errorf("exceed upper barrier %d: %f", i, out)
+		}
+		if i > 70 {
+			break
+		}
+
+		cclog.Infof("it %d in: %f out: %f\n", i, in, out)
+		i++
+	}
+}
 
 func TestUpperBarrierAndMove(t *testing.T) {
 	testconfig := `{
@@ -462,5 +467,60 @@ func TestUpperBarrierAndMove(t *testing.T) {
 
 		cclog.Infof("%sit %d %sin: %f out: %f\n", Green, i, Reset, in, out)
 		i++
+	}
+}
+
+func TestWarmup(t *testing.T) {
+	testconfig := `{
+         "tolerance": 2,
+         "borders": {
+           "lower": 30,
+           "upper": 85
+         }}`
+
+	cclog.Init(loglevel, false)
+	o, err := NewGssOptimizer(json.RawMessage(testconfig))
+	if err != nil {
+		t.Fatalf("failed to init GssOptimizer: %v", err)
+	}
+
+	cclog.Debug("=== Testing Warmup ===")
+
+	newLimit, warmup1 := o.Start(42.0)
+	newLimit, warmup2 := o.Start(newLimit)
+	newLimit, warmup3 := o.Start(newLimit)
+
+	if warmup1 || warmup2 || !warmup3 {
+		t.Fatalf("Test didn't warmup after the expected 2 iterations")
+	}
+}
+
+func TestFirestarterBergamo(t *testing.T) {
+	testconfig := `{
+         "tolerance": 2,
+         "borders": {
+           "lower": 50,
+           "upper": 400
+         }}`
+
+	cclog.Init(loglevel, false)
+	o, err := NewGssOptimizer(json.RawMessage(testconfig))
+	if err != nil {
+		t.Fatalf("failed to init GssOptimizer: %v", err)
+	}
+
+	cclog.Debug("=== Testing Firestarter Bergamo Samples ===")
+
+	samples := LoadSamples(t, "testdata/FIRESTARTER.bergamo1", 0)
+
+	newLimit, _ := o.Start(42.0)
+	newLimit, _ = o.Start(newLimit)
+
+	for i := 0; i < 30; i++ {
+		newLimit = o.Update(ProbeSample(t, samples, newLimit))
+	}
+
+	if newLimit < 250 || newLimit > 280 {
+		t.Errorf("GSS optimizer did not converge FIRESTARTER correctly: %f", newLimit)
 	}
 }
