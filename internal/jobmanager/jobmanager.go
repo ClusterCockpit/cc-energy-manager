@@ -365,10 +365,12 @@ func (j *JobManager) PowerBudgetWeight() float64 {
 }
 
 func (j *JobManager) PowerBudgetSet(power float64) {
-	if len(j.targetToOptimizer) <= 0 {
+	if len(j.targetToOptimizer) <= 0 || j.deviceCount() <= 0 {
 		j.Debug("Cannot set PowerBudget: No optimizers to account for")
 		return
 	}
+
+	power /= float64(j.deviceCount())
 
 	for _, optimizer := range j.targetToOptimizer {
 		powerBudgetLowerCfg, powerBudgetUpperCfg := optimizer.GetBordersCfg()
