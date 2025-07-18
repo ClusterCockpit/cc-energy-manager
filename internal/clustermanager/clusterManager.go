@@ -30,6 +30,7 @@ type Cluster struct {
 	subClusters map[string]*SubCluster
 	jobIdToJob  map[int64]*Job
 	hostToJobs  map[string]map[int64]*Job
+	powerBudgetTotal float64
 }
 
 type SubCluster struct {
@@ -70,10 +71,11 @@ func (scid SubClusterId) String() string {
 
 func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 	clusterConfig := struct {
-		Cluster     *string                    `json:"cluster"`
-		SubCluster  *string                    `json:"subcluster"`
-		DeviceTypes map[string]json.RawMessage `json:"devicetypes"`
-		HostRegex   *string                    `json:"hostRegex"`
+		Cluster          *string                    `json:"cluster"`
+		SubCluster       *string                    `json:"subcluster"`
+		DeviceTypes      map[string]json.RawMessage `json:"devicetypes"`
+		HostRegex        *string                    `json:"hostRegex"`
+		PowerBudgetTotal float64                    `json:"powerBudgetTotal"`
 	}{}
 
 	err := json.Unmarshal(rawClusterConfig, &clusterConfig)
@@ -83,6 +85,10 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 
 	if clusterConfig.Cluster == nil || clusterConfig.SubCluster == nil || clusterConfig.DeviceTypes == nil || clusterConfig.HostRegex == nil {
 		return fmt.Errorf("cluster config is missing 'cluster', 'subcluster', 'devicetypes', or 'hostRegex': %s", string(rawClusterConfig))
+	}
+
+	if clusterConfig.PowerBudgetTotal <= 0.0 {
+		return fmt.Errorf("cluster config must contain a non-zeor positive powerBudgetTotal")
 	}
 
 	subClusterId := SubClusterId{
@@ -98,6 +104,7 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 			subClusters: make(map[string]*SubCluster),
 			jobIdToJob:  make(map[int64]*Job),
 			hostToJobs:  make(map[string]map[int64]*Job),
+			powerBudgetTotal: clusterConfig.PowerBudgetTotal,
 		}
 		cm.clusters[*clusterConfig.Cluster] = cluster
 	}
@@ -229,6 +236,11 @@ func (cm *clusterManager) registerJobManager(job *Job, deviceType string) {
 	}
 
 	job.deviceTypeToJobMgr[deviceType] = jm
+
+	err = cm.UpdateJobPowerLimits(job.data.Cluster)
+	if err != nil {
+		cclog.Errorf("UpdateJobPowerLimits failed: %v", err)
+	}
 
 	// Which channel size should we choose here?
 	// 100000 should be plenty for incoming CCMessages
@@ -498,4 +510,40 @@ func (cm *clusterManager) GetSubClusterIdForHost(hostname string) (SubClusterId,
 		}
 	}
 	return subClusterId, nil
+}
+
+func (cm *clusterManager) UpdateJobPowerLimits(cluster string) error {
+	if len(cm.clusters[cluster].jobIdToJob) == 0 {
+		return nil
+	}
+
+	// We initially store only a 'weight' as the power value and we'll then later adjust
+	// it to the actual power value:
+	// map[jobId]map[deviceId]power
+	jobIdToDeviceWeight := make(map[int64]map[string]float64)
+
+	weightSum := 0.0
+	for jobId, job := range cm.clusters[cluster].jobIdToJob {
+		jobIdToDeviceWeight[jobId] = make(map[string]float64)
+
+		for deviceId, jobManager := range job.deviceTypeToJobMgr {
+			weight := jobManager.PowerBudgetWeight()
+			weightSum += weight
+			jobIdToDeviceWeight[jobId][deviceId] = weight
+		}
+	}
+
+	if weightSum <= 0.0 {
+		return fmt.Errorf("Unable to update power budget. Configured weights are negative!")
+	}
+
+	powerFactor := cm.clusters[cluster].powerBudgetTotal / weightSum
+
+	for jobId, job := range cm.clusters[cluster].jobIdToJob {
+		for deviceId, jobManager := range job.deviceTypeToJobMgr {
+			jobManager.PowerBudgetSet(jobIdToDeviceWeight[jobId][deviceId] * powerFactor)
+		}
+	}
+
+	return nil
 }

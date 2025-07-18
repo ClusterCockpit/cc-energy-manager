@@ -27,6 +27,7 @@ type jobManagerConfig struct {
 	ControlDefaultValue *float64        `json:"controlDefaultValue"`
 	IntervalConverged   string          `json:"intervalConverged"`
 	IntervalSearch      string          `json:"intervalSearch"`
+	PowerBudgetWeight   float64         `json:"powerBudgetWeight"`
 	OptimizerCfg        json.RawMessage `json:"optimizer"`
 }
 
@@ -48,6 +49,7 @@ type JobManager struct {
 	warmUpDone        bool
 	startTime         time.Time
 	ctrl              controller.Controller
+	powerBudgetWeight float64
 }
 
 func NewJobManager(ctrl controller.Controller, deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessage) (*JobManager, error) {
@@ -353,6 +355,42 @@ func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
 	// if the metric doesn't belong to one of ours hosts.
 	j.Debug("Received metric which doesn't belong to us.")
 	return false
+}
+
+func (j* JobManager) PowerBudgetWeight() float64 {
+	return j.cfg.PowerBudgetWeight * float64(j.deviceCount())
+}
+
+func (j* JobManager) PowerBudgetSet(power float64) {
+	if len(j.targetToOptimizer) <= 0 {
+		j.Debug("Cannot set PowerBudget: No optimizers to account for")
+		return
+	}
+
+	for _, optimizer := range j.targetToOptimizer {
+		powerBudgetLowerCfg, powerBudgetUpperCfg := optimizer.GetBordersCfg()
+		powerBudgetLowerCur, _ := optimizer.GetBordersCur()
+
+		powerBudgetUpperCur := min(power, powerBudgetUpperCfg)
+		if powerBudgetUpperCur <= powerBudgetLowerCur {
+			if powerBudgetUpperCur > powerBudgetLowerCfg {
+				powerBudgetLowerCur = powerBudgetLowerCfg
+			} else {
+				j.Debug("Cannot set powerlimit (%v, %v) below minimum allowed (%v)", power, powerBudgetUpperCur, powerBudgetLowerCfg)
+				continue
+			}
+		}
+		
+		optimizer.SetBorders(powerBudgetLowerCur, powerBudgetUpperCur)
+	}
+}
+
+func (j *JobManager) deviceCount() int {
+	count := 0
+	for _, devices := range j.targetToDevices {
+		count += len(devices)
+	}
+	return count
 }
 
 func (j *JobManager) Debug(fmtstr string, args ...any) {

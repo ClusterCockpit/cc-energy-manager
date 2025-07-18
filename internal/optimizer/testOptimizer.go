@@ -21,6 +21,8 @@ type testOptimizerConfig struct {
 type testOptimizer struct {
 	lowerBound float64
 	upperBound float64
+	lowerBoundCfg float64
+	upperBoundCfg float64
 	current    float64
 	delta      float64
 }
@@ -42,6 +44,8 @@ func NewTestOptimizer(config json.RawMessage) (*testOptimizer, error) {
 	o := testOptimizer{
 		lowerBound: *c.Borders.Lower,
 		upperBound: *c.Borders.Upper,
+		lowerBoundCfg: *c.Borders.Lower,
+		upperBoundCfg: *c.Borders.Upper,
 		current:    *c.Borders.Lower,
 		delta:      (*c.Borders.Upper - *c.Borders.Lower) / 10.0,
 	}
@@ -64,4 +68,17 @@ func (o *testOptimizer) Update(_ float64) float64 {
 		o.current = o.upperBound
 	}
 	return oldCurrent
+}
+
+func (o *testOptimizer) GetBordersCfg() (float64, float64) {
+	return o.lowerBoundCfg, o.upperBoundCfg
+}
+
+func (o *testOptimizer) GetBordersCur() (float64, float64) {
+	return o.lowerBound, o.upperBound
+}
+
+func (o *testOptimizer) SetBorders(lower, upper float64) {
+	o.lowerBound = max(lower, o.lowerBoundCfg)
+	o.upperBound = max(upper, o.upperBoundCfg)
 }

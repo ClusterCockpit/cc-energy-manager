@@ -48,6 +48,8 @@ type gssOptimizer struct {
 	hMax         float64
 	lowerBarrier float64 // never go below this barrier
 	upperBarrier float64 // never go above this barrier
+	lowerBarrierCfg float64 // original config value
+	upperBarrierCfg float64 // original config value
 	tol          float64
 	counter      int
 	mode         Mode
@@ -164,6 +166,19 @@ func (o *gssOptimizer) Update(fx float64) float64 {
 	default:
 		return o.BroadenUp()
 	}
+}
+
+func (o *gssOptimizer) GetBordersCfg() (float64, float64) {
+	return o.lowerBarrierCfg, o.upperBarrierCfg
+}
+
+func (o *gssOptimizer) GetBordersCur() (float64, float64) {
+	return o.lowerBarrier, o.upperBarrier
+}
+
+func (o *gssOptimizer) SetBorders(lower, upper float64) {
+	o.lowerBarrier = max(o.lowerBarrierCfg, lower)
+	o.upperBarrier = min(o.upperBarrierCfg, upper)
 }
 
 func (o *gssOptimizer) DumpState(position string) {
@@ -397,6 +412,8 @@ func NewGssOptimizer(config json.RawMessage) (*gssOptimizer, error) {
 		d:            nan,
 		lowerBarrier: float64(c.Borders.Lower),
 		upperBarrier: float64(c.Borders.Upper),
+		lowerBarrierCfg: float64(c.Borders.Lower),
+		upperBarrierCfg: float64(c.Borders.Upper),
 		fa:           nan,
 		fb:           nan,
 		fc:           nan,

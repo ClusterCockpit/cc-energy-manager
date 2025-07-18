@@ -40,6 +40,8 @@ type gssngOptimizer struct {
 	retriesCount int
 	borderLower  float64
 	borderUpper  float64
+	borderLowerCfg float64
+	borderUpperCfg float64
 	validSampleMin float64
 	validSampleMax float64
 	fudgeFactor  float64
@@ -115,9 +117,17 @@ func (o *gssngOptimizer) Update(y float64) float64 {
 	}
 }
 
+func (o *gssngOptimizer) GetBordersCfg() (float64, float64) {
+	return o.borderLowerCfg, o.borderUpperCfg
+}
+
+func (o *gssngOptimizer) GetBordersCur() (float64, float64) {
+	return o.borderLower, o.borderUpper
+}
+
 func (o *gssngOptimizer) SetBorders(lower, upper float64) {
-	o.borderLower = lower
-	o.borderUpper = upper
+	o.borderLower = max(lower, o.borderLowerCfg)
+	o.borderUpper = min(upper, o.borderUpperCfg)
 
 	o.ClampToBorders()
 	
