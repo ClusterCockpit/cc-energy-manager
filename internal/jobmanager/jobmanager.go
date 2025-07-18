@@ -379,7 +379,8 @@ func (j *JobManager) PowerBudgetSet(power float64) {
 			if powerBudgetUpperCur > powerBudgetLowerCfg {
 				powerBudgetLowerCur = powerBudgetLowerCfg
 			} else {
-				j.Debug("Cannot set powerlimit (%v, %v) below minimum allowed (%v)", power, powerBudgetUpperCur, powerBudgetLowerCfg)
+				j.Debug("Cannot set powerlimit %vW [%vW, %vW] below minimum allowed [%vW, %vW]",
+					power, powerBudgetUpperCur, powerBudgetLowerCur, powerBudgetUpperCfg, powerBudgetLowerCfg)
 				continue
 			}
 		}
