@@ -36,26 +36,26 @@ type gssOptimizerConfig struct {
 //  a       c     d       b
 
 type gssOptimizer struct {
-	fa           float64 // value at a
-	fb           float64 // value at b
-	fc           float64 // value at c
-	fd           float64 // value at d
-	a            float64 // outer interval lower point
-	b            float64 // outer interval upper point
-	c            float64 // inner interval lower point
-	d            float64 // inner interval upper point
-	h            float64 // outer interval distance
-	hMax         float64
-	lowerBarrier float64 // never go below this barrier
-	upperBarrier float64 // never go above this barrier
+	fa              float64 // value at a
+	fb              float64 // value at b
+	fc              float64 // value at c
+	fd              float64 // value at d
+	a               float64 // outer interval lower point
+	b               float64 // outer interval upper point
+	c               float64 // inner interval lower point
+	d               float64 // inner interval upper point
+	h               float64 // outer interval distance
+	hMax            float64
+	lowerBarrier    float64 // never go below this barrier
+	upperBarrier    float64 // never go above this barrier
 	lowerBarrierCfg float64 // original config value
 	upperBarrierCfg float64 // original config value
-	tol          float64
-	counter      int
-	mode         Mode
-	probe        float64
-	broadenLimit int
-	fudgeFactor  float64
+	tol             float64
+	counter         int
+	mode            Mode
+	probe           float64
+	broadenLimit    int
+	fudgeFactor     float64
 }
 
 var (
@@ -406,24 +406,24 @@ func NewGssOptimizer(config json.RawMessage) (*gssOptimizer, error) {
 		return nil, err
 	}
 	o := gssOptimizer{
-		a:            float64(c.Borders.Lower),
-		b:            float64(c.Borders.Upper),
-		c:            nan,
-		d:            nan,
-		lowerBarrier: float64(c.Borders.Lower),
-		upperBarrier: float64(c.Borders.Upper),
+		a:               float64(c.Borders.Lower),
+		b:               float64(c.Borders.Upper),
+		c:               nan,
+		d:               nan,
+		lowerBarrier:    float64(c.Borders.Lower),
+		upperBarrier:    float64(c.Borders.Upper),
 		lowerBarrierCfg: float64(c.Borders.Lower),
 		upperBarrierCfg: float64(c.Borders.Upper),
-		fa:           nan,
-		fb:           nan,
-		fc:           nan,
-		fd:           nan,
-		mode:         Narrow,
-		probe:        nan,
-		hMax:         float64(c.Borders.Upper-c.Borders.Lower) * 0.5,
-		tol:          float64(c.Tolerance),
-		broadenLimit: c.BroadenLimit,
-		fudgeFactor:  c.FudgeFactor,
+		fa:              nan,
+		fb:              nan,
+		fc:              nan,
+		fd:              nan,
+		mode:            Narrow,
+		probe:           nan,
+		hMax:            float64(c.Borders.Upper-c.Borders.Lower) * 0.5,
+		tol:             float64(c.Tolerance),
+		broadenLimit:    c.BroadenLimit,
+		fudgeFactor:     c.FudgeFactor,
 	}
 
 	return &o, err

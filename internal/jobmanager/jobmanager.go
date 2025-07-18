@@ -357,11 +357,11 @@ func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
 	return false
 }
 
-func (j* JobManager) PowerBudgetWeight() float64 {
+func (j *JobManager) PowerBudgetWeight() float64 {
 	return j.cfg.PowerBudgetWeight * float64(j.deviceCount())
 }
 
-func (j* JobManager) PowerBudgetSet(power float64) {
+func (j *JobManager) PowerBudgetSet(power float64) {
 	if len(j.targetToOptimizer) <= 0 {
 		j.Debug("Cannot set PowerBudget: No optimizers to account for")
 		return
@@ -380,7 +380,7 @@ func (j* JobManager) PowerBudgetSet(power float64) {
 				continue
 			}
 		}
-		
+
 		optimizer.SetBorders(powerBudgetLowerCur, powerBudgetUpperCur)
 	}
 }

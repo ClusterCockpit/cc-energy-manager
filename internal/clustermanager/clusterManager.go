@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/ClusterCockpit/cc-energy-manager/internal/jobmanager"
 	"github.com/ClusterCockpit/cc-energy-manager/internal/controller"
+	"github.com/ClusterCockpit/cc-energy-manager/internal/jobmanager"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
 	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
@@ -27,9 +27,9 @@ type SubClusterId struct {
 }
 
 type Cluster struct {
-	subClusters map[string]*SubCluster
-	jobIdToJob  map[int64]*Job
-	hostToJobs  map[string]map[int64]*Job
+	subClusters      map[string]*SubCluster
+	jobIdToJob       map[int64]*Job
+	hostToJobs       map[string]map[int64]*Job
 	powerBudgetTotal float64
 }
 
@@ -101,9 +101,9 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 	cluster, ok := cm.clusters[*clusterConfig.Cluster]
 	if !ok {
 		cluster = &Cluster{
-			subClusters: make(map[string]*SubCluster),
-			jobIdToJob:  make(map[int64]*Job),
-			hostToJobs:  make(map[string]map[int64]*Job),
+			subClusters:      make(map[string]*SubCluster),
+			jobIdToJob:       make(map[int64]*Job),
+			hostToJobs:       make(map[string]map[int64]*Job),
 			powerBudgetTotal: clusterConfig.PowerBudgetTotal,
 		}
 		cm.clusters[*clusterConfig.Cluster] = cluster

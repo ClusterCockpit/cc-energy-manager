@@ -30,21 +30,21 @@ type sample struct {
 }
 
 type gssngOptimizer struct {
-	lowerOuter   sample
-	lowerInner   sample
-	upperInner   sample
-	upperOuter   sample
-	probeMode    ProbeMode
-	widthMin     float64
-	retriesMax   int
-	retriesCount int
-	borderLower  float64
-	borderUpper  float64
+	lowerOuter     sample
+	lowerInner     sample
+	upperInner     sample
+	upperOuter     sample
+	probeMode      ProbeMode
+	widthMin       float64
+	retriesMax     int
+	retriesCount   int
+	borderLower    float64
+	borderUpper    float64
 	borderLowerCfg float64
 	borderUpperCfg float64
 	validSampleMin float64
 	validSampleMax float64
-	fudgeFactor  float64
+	fudgeFactor    float64
 }
 
 func (o *gssngOptimizer) Start(y float64) (float64, bool) {
@@ -130,7 +130,7 @@ func (o *gssngOptimizer) SetBorders(lower, upper float64) {
 	o.borderUpper = min(upper, o.borderUpperCfg)
 
 	o.ClampToBorders()
-	
+
 	// Set probe mode, since this function may be called, while a measurement is currently in progress.
 	// Once we run Update again, we will have to restart the measurement in order to actually obtain
 	// the correct value.
@@ -190,7 +190,7 @@ func (o *gssngOptimizer) TryNarrow() bool {
 	o.retriesCount = 0
 
 	// are we allowed to narrow further?
-	if (o.upperOuter.x - o.lowerOuter.x) * invphi < o.widthMin {
+	if (o.upperOuter.x-o.lowerOuter.x)*invphi < o.widthMin {
 		return false
 	}
 
@@ -249,7 +249,7 @@ func (o *gssngOptimizer) BroadenUp() {
 	// |------|---|------|
 	o.lowerInner = o.upperInner
 	o.upperInner = o.upperOuter
-	o.upperOuter.x = o.lowerOuter.x + phi * (o.upperOuter.x - o.lowerOuter.x)
+	o.upperOuter.x = o.lowerOuter.x + phi*(o.upperOuter.x-o.lowerOuter.x)
 	o.upperOuter.y = -1
 }
 
@@ -260,7 +260,7 @@ func (o *gssngOptimizer) BroadenDown() {
 	// |------|---|------|
 	o.upperInner = o.lowerInner
 	o.lowerInner = o.lowerOuter
-	o.lowerOuter.x = o.upperOuter.x - phi * (o.upperOuter.x - o.lowerOuter.x)
+	o.lowerOuter.x = o.upperOuter.x - phi*(o.upperOuter.x-o.lowerOuter.x)
 	o.lowerOuter.y = -1
 }
 
@@ -271,7 +271,7 @@ func (o *gssngOptimizer) NarrowUp() {
 	//        |---|--|---|
 	o.lowerOuter = o.lowerInner
 	o.lowerInner = o.upperInner
-	o.upperInner.x = o.lowerOuter.x + invphi * (o.upperOuter.x - o.lowerOuter.x)
+	o.upperInner.x = o.lowerOuter.x + invphi*(o.upperOuter.x-o.lowerOuter.x)
 	o.upperInner.y = -1
 }
 
@@ -282,33 +282,33 @@ func (o *gssngOptimizer) NarrowDown() {
 	// |---|--|---|
 	o.upperOuter = o.upperInner
 	o.upperInner = o.lowerInner
-	o.lowerInner.x = o.upperOuter.x - invphi * (o.upperOuter.x - o.lowerOuter.x)
+	o.lowerInner.x = o.upperOuter.x - invphi*(o.upperOuter.x-o.lowerOuter.x)
 	o.lowerInner.y = -1
 }
 
 func (o *gssngOptimizer) ClampToBorders() {
 	o.lowerOuter.x = o.borderLower
 	o.upperOuter.x = o.borderUpper
-	o.lowerInner.x = o.upperOuter.x - invphi * (o.upperOuter.x - o.lowerOuter.x)
-	o.upperInner.x = o.lowerOuter.x + invphi * (o.upperOuter.x - o.lowerOuter.x)
+	o.lowerInner.x = o.upperOuter.x - invphi*(o.upperOuter.x-o.lowerOuter.x)
+	o.upperInner.x = o.lowerOuter.x + invphi*(o.upperOuter.x-o.lowerOuter.x)
 	o.InvalidateAll()
 }
 
 func (o *gssngOptimizer) ClampToLowerBorder() {
 	o.lowerOuter.x = o.borderLower
 	o.lowerOuter.y = -1
-	o.lowerInner.x = o.upperOuter.x - invphi * (o.upperOuter.x - o.lowerOuter.x)
+	o.lowerInner.x = o.upperOuter.x - invphi*(o.upperOuter.x-o.lowerOuter.x)
 	o.lowerInner.y = -1
-	o.upperInner.x = o.lowerOuter.x + invphi * (o.upperOuter.x - o.lowerOuter.x)
+	o.upperInner.x = o.lowerOuter.x + invphi*(o.upperOuter.x-o.lowerOuter.x)
 	o.upperInner.y = -1
 }
 
 func (o *gssngOptimizer) ClampToUpperBorder() {
 	o.upperOuter.x = o.borderUpper
 	o.upperOuter.y = -1
-	o.lowerInner.x = o.upperOuter.x - invphi * (o.upperOuter.x - o.lowerOuter.x)
+	o.lowerInner.x = o.upperOuter.x - invphi*(o.upperOuter.x-o.lowerOuter.x)
 	o.lowerInner.y = -1
-	o.upperInner.x = o.lowerOuter.x + invphi * (o.upperOuter.x - o.lowerOuter.x)
+	o.upperInner.x = o.lowerOuter.x + invphi*(o.upperOuter.x-o.lowerOuter.x)
 	o.upperInner.y = -1
 }
 
@@ -379,8 +379,8 @@ func NewGssNgOptimizer(config json.RawMessage) (*gssngOptimizer, error) {
 		} `json:"borders,omitempty"`
 		ValidSampleMin float64 `json:"validSampleMin"`
 		ValidSampleMax float64 `json:"validSampleMax"`
-		FudgeFactor  float64 `json:"fudgeFactor"`
-		RetriesMax int `json:"retriesMax"`
+		FudgeFactor    float64 `json:"fudgeFactor"`
+		RetriesMax     int     `json:"retriesMax"`
 	}
 
 	c.Tolerance = 10
@@ -404,26 +404,26 @@ func NewGssNgOptimizer(config json.RawMessage) (*gssngOptimizer, error) {
 			y: -1,
 		},
 		lowerInner: sample{
-			x: c.Borders.Upper - invphi * (c.Borders.Upper - c.Borders.Lower),
+			x: c.Borders.Upper - invphi*(c.Borders.Upper-c.Borders.Lower),
 			y: -1,
 		},
 		upperInner: sample{
-			x: c.Borders.Lower + invphi * (c.Borders.Upper - c.Borders.Lower),
+			x: c.Borders.Lower + invphi*(c.Borders.Upper-c.Borders.Lower),
 			y: -1,
 		},
 		upperOuter: sample{
 			x: c.Borders.Upper,
 			y: -1,
 		},
-		probeMode:   ProbeNone,
-		widthMin:    c.Tolerance,
-		retriesMax:  c.RetriesMax,
-		retriesCount: 0,
-		borderLower: c.Borders.Lower,
-		borderUpper: c.Borders.Upper,
+		probeMode:      ProbeNone,
+		widthMin:       c.Tolerance,
+		retriesMax:     c.RetriesMax,
+		retriesCount:   0,
+		borderLower:    c.Borders.Lower,
+		borderUpper:    c.Borders.Upper,
 		validSampleMin: c.ValidSampleMin,
 		validSampleMax: c.ValidSampleMax,
-		fudgeFactor: c.FudgeFactor,
+		fudgeFactor:    c.FudgeFactor,
 	}
 
 	return &o, err
