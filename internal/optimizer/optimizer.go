@@ -31,8 +31,6 @@ func NewOptimizer(rawConfig json.RawMessage) (Optimizer, error) {
 		return NewGssOptimizer(rawConfig)
 	case "gssng":
 		return NewGssNgOptimizer(rawConfig)
-	//case "trace":
-	//	return NewTraceOptimizer(rawConfig)
 	case "test":
 		return NewTestOptimizer(rawConfig)
 	//case "wqr":
