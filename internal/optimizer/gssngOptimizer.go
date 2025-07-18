@@ -118,12 +118,10 @@ func (o *gssngOptimizer) Update(y float64) float64 {
 }
 
 func (o *gssngOptimizer) GetBordersCfg() (float64, float64) {
-	cclog.Debugf("gssng cfg --> [%v, %v]", o.borderLowerCfg, o.borderUpperCfg)
 	return o.borderLowerCfg, o.borderUpperCfg
 }
 
 func (o *gssngOptimizer) GetBordersCur() (float64, float64) {
-	cclog.Debugf("gssng cur --> [%v, %v]", o.borderLower, o.borderUpper)
 	return o.borderLower, o.borderUpper
 }
 

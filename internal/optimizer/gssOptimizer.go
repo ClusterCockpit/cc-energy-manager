@@ -169,12 +169,10 @@ func (o *gssOptimizer) Update(fx float64) float64 {
 }
 
 func (o *gssOptimizer) GetBordersCfg() (float64, float64) {
-	cclog.Debugf("gss cfg --> [%v, %v]", o.lowerBarrierCfg, o.upperBarrierCfg)
 	return o.lowerBarrierCfg, o.upperBarrierCfg
 }
 
 func (o *gssOptimizer) GetBordersCur() (float64, float64) {
-	cclog.Debugf("gss cur --> [%v, %v]", o.lowerBarrier, o.upperBarrier)
 	return o.lowerBarrier, o.upperBarrier
 }
 
