@@ -171,6 +171,11 @@ func (cm *clusterManager) StopJob(stopJobData ccspecs.BaseJob) {
 	for _, r := range job.data.Resources {
 		delete(cluster.hostToJobs[r.Hostname], job.data.JobID)
 	}
+
+	err := cm.UpdateJobPowerLimits(job.data.Cluster)
+	if err != nil {
+		cclog.Errorf("UpdateJobPowerLimits failed: %v", err)
+	}
 }
 
 func (cm *clusterManager) cleanupCollidingJobs(job *Job) {
