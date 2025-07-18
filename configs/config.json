@@ -18,6 +18,7 @@
       "cluster": "fritz",
       "subcluster": "main",
       "hostRegex": "^f\\d\\d\\d\\d$",
+      "powerBudgetTotal": 10000,
       "devicetypes" : {
         "socket" : {
           "scope": "node",
@@ -31,6 +32,7 @@
           "controlDefaultValue": 300,
           "intervalConverged": "10m",
           "intervalSearch": "2m",
+          "powerBudgetWeight": 1,
           "optimizer": {
             "type": "gss",
             "tolerance": 5,
@@ -46,6 +48,7 @@
       "cluster": "alex",
       "subcluster": "a100",
       "hostRegex": "^a\\d\\d\\d\\d$",
+      "powerBudgetTotal": 20000,
       "devicetypes": {
         "nvidia_gpu" : {
           "scope": "device",
@@ -59,6 +62,7 @@
           "controlDefaultValue": 250,
           "intervalConverged": "5m",
           "intervalSearch": "2m",
+          "powerBudgetWeight": 2,
           "optimizer": {
             "type": "gss",
             "tolerance": 5,
@@ -82,6 +86,7 @@
           "controlDefaultValue": 100,
           "intervalConverged": "5m",
           "intervalSearch": "2m",
+          "powerBudgetWeight": 1,
           "optimizer": {
             "type": "gss",
             "tolerance": 5,
