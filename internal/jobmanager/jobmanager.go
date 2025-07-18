@@ -49,7 +49,6 @@ type JobManager struct {
 	warmUpDone        bool
 	startTime         time.Time
 	ctrl              controller.Controller
-	powerBudgetWeight float64
 }
 
 func NewJobManager(ctrl controller.Controller, deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessage) (*JobManager, error) {
@@ -65,6 +64,10 @@ func NewJobManager(ctrl controller.Controller, deviceType string, job ccspecs.Ba
 	agg, err := aggregator.New(cfg.AggCfg)
 	if err != nil {
 		return nil, err
+	}
+
+	if cfg.PowerBudgetWeight <= 0.0 {
+		cfg.PowerBudgetWeight = 1.0
 	}
 
 	j := JobManager{
