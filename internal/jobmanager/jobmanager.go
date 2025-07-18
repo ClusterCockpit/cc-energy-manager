@@ -380,7 +380,7 @@ func (j *JobManager) PowerBudgetSet(power float64) {
 				powerBudgetLowerCur = powerBudgetLowerCfg
 			} else {
 				j.Debug("Cannot set powerlimit %vW [%vW, %vW] below minimum allowed [%vW, %vW]",
-					power, powerBudgetUpperCur, powerBudgetLowerCur, powerBudgetUpperCfg, powerBudgetLowerCfg)
+					power, powerBudgetLowerCur, powerBudgetUpperCur, powerBudgetLowerCfg, powerBudgetUpperCfg)
 				continue
 			}
 		}
