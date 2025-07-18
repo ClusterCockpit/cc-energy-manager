@@ -542,7 +542,7 @@ func (cm *clusterManager) UpdateJobPowerLimits(cluster string) error {
 	for jobId, job := range cm.clusters[cluster].jobIdToJob {
 		for deviceId, jobManager := range job.deviceTypeToJobMgr {
 			power := jobIdToDeviceWeight[jobId][deviceId] * powerFactor
-			cclog.Debug("Setting power for job %v to %v", jobId, power)
+			cclog.Debugf("Setting power for job %v to %v", jobId, power)
 			jobManager.PowerBudgetSet(power)
 		}
 	}
