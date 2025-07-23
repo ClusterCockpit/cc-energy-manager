@@ -88,7 +88,7 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 	}
 
 	if clusterConfig.PowerBudgetTotal <= 0.0 {
-		return fmt.Errorf("cluster config must contain a non-zeor positive powerBudgetTotal")
+		return fmt.Errorf("cluster config must contain a non-zero positive powerBudgetTotal")
 	}
 
 	subClusterId := SubClusterId{
