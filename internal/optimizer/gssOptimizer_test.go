@@ -8,9 +8,20 @@ import (
 	"encoding/json"
 	"math/rand"
 	"testing"
+	"os"
+	"bufio"
+	"strings"
+	"strconv"
+	"slices"
+	"sort"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 )
+
+type SamplePoint struct {
+	PowerLimit float64
+	PDP        float64
+}
 
 const loglevel = "debug"
 
@@ -522,5 +533,87 @@ func TestFirestarterBergamo(t *testing.T) {
 
 	if newLimit < 250 || newLimit > 280 {
 		t.Errorf("GSS optimizer did not converge FIRESTARTER correctly: %f", newLimit)
+	}
+}
+
+func LoadSamples(t *testing.T, path string, socket int) []SamplePoint {
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("Unable to open test sample file: %v", err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+
+	result := make([]SamplePoint, 0)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		elements := strings.Split(line, ";")
+		if len(elements) != 8 {
+			continue
+		}
+		if elements[1] == "POWER_LIMIT" || elements[0] == "SOCKET" {
+			continue
+		}
+		socketTest, err := strconv.Atoi(strings.TrimSpace(elements[0]))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if socket != socketTest {
+			continue
+		}
+		powerLimit, err := strconv.ParseFloat(strings.TrimSpace(elements[1]), 64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pdp, err := strconv.ParseFloat(strings.TrimSpace(elements[4]), 64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result = append(result, SamplePoint{PowerLimit: powerLimit, PDP: pdp})
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].PowerLimit < result[j].PowerLimit
+	})
+
+	if len(result) < 10 {
+		t.Fatal("Sample testdata contains less than 10 points. Did you specify the right file?")
+	}
+
+	return result
+}
+
+func ProbeSample(t *testing.T, samples []SamplePoint, powerLimit float64) float64 {
+	if len(samples) == 0 {
+		return 0.0
+	}
+	cmpFunc := func(s SamplePoint, t float64) int {
+		if s.PowerLimit < t {
+			return -1
+		}
+		if s.PowerLimit > t {
+			return 1
+		}
+		return 0
+	}
+
+	// Find nearest sample
+	pos, _ := slices.BinarySearchFunc(samples, powerLimit, cmpFunc)
+	if pos >= len(samples) {
+		return samples[pos-1].PDP
+	} else if pos > 0 {
+		l := samples[pos-1]
+		r := samples[pos]
+		if powerLimit-l.PowerLimit < r.PowerLimit-powerLimit {
+			return l.PDP
+		} else {
+			return r.PDP
+		}
+	} else {
+		return samples[pos].PDP
 	}
 }
