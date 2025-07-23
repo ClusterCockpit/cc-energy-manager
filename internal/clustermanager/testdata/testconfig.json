@@ -9,6 +9,7 @@
       "cluster": "fritz",
       "subcluster": "main",
       "hostRegex": "^f\\d\\d\\d\\d$",
+      "powerBudgetTotal": 1000,
       "devicetypes": {
         "socket": {
           "scope": "node",

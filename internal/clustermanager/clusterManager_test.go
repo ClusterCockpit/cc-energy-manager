@@ -28,7 +28,7 @@ func TestNew(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	_, err = NewClusterManager(config.Clusters)
+	_, err = NewClusterManager(nil, config.Clusters)
 	if err != nil {
 		t.Fatalf("NewClusterManger() failed: %v", err)
 	}
