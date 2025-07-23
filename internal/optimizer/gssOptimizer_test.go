@@ -5,15 +5,15 @@
 package optimizer
 
 import (
+	"bufio"
 	"encoding/json"
 	"math/rand"
-	"testing"
 	"os"
-	"bufio"
-	"strings"
-	"strconv"
 	"slices"
 	"sort"
+	"strconv"
+	"strings"
+	"testing"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 )
