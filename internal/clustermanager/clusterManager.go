@@ -14,7 +14,7 @@ import (
 	"github.com/ClusterCockpit/cc-energy-manager/internal/jobmanager"
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
-	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
+	"github.com/ClusterCockpit/cc-lib/schema"
 )
 
 //	type JobManagerId struct {
@@ -41,7 +41,7 @@ type SubCluster struct {
 
 type Job struct {
 	deviceTypeToJobMgr map[string]*jobmanager.JobManager
-	data               ccspecs.BaseJob
+	data               schema.Job
 }
 
 type clusterManager struct {
@@ -129,7 +129,7 @@ func (cm *clusterManager) AddOutput(output chan lp.CCMessage) {
 	cm.output = output
 }
 
-func (cm *clusterManager) StopJob(stopJobData ccspecs.BaseJob) {
+func (cm *clusterManager) StopJob(stopJobData schema.Job) {
 	// WARNING: stopJobData is reconstructed from the StopJob event and is incomplete.
 	// Be careful which values you use and get the actual job data from the JobManager
 	if len(stopJobData.Cluster) == 0 || stopJobData.JobID == 0 {
@@ -179,11 +179,11 @@ func (cm *clusterManager) StopJob(stopJobData ccspecs.BaseJob) {
 }
 
 func (cm *clusterManager) cleanupCollidingJobs(job *Job) {
-	jobsToStop := make(map[int64]*ccspecs.BaseJob, 0)
+	jobsToStop := make(map[int64]*schema.Job, 0)
 
 	// Because jobs cannot cross multiple clusters, we only have to check
 	// for overlapping resources on the same cluster.
-	existingResources := make(map[string]*ccspecs.BaseJob)
+	existingResources := make(map[string]*schema.Job)
 	for _, runningJob := range cm.clusters[job.data.Cluster].jobIdToJob {
 		for _, runningJobResource := range runningJob.data.Resources {
 			// hwthreads
@@ -219,7 +219,7 @@ func (cm *clusterManager) cleanupCollidingJobs(job *Job) {
 
 		for _, job := range jobsToStop {
 			cclog.ComponentWarn("ClusterManager", "- [%s] %d", job.Cluster, job.JobID)
-			cm.StopJob(ccspecs.BaseJob{JobID: job.JobID, Cluster: job.Cluster})
+			cm.StopJob(schema.Job{JobID: job.JobID, Cluster: job.Cluster})
 		}
 	}
 }
@@ -253,7 +253,7 @@ func (cm *clusterManager) registerJobManager(job *Job, deviceType string) {
 	jm.Start()
 }
 
-func (cm *clusterManager) StartJob(startJobData ccspecs.BaseJob) {
+func (cm *clusterManager) StartJob(startJobData schema.Job) {
 	if len(startJobData.Cluster) == 0 || startJobData.JobID == 0 {
 		cclog.Warnf("Unable to start job, which is missing 'Cluster' or 'JobID'")
 		return
@@ -305,8 +305,8 @@ func (cm *clusterManager) StartJob(startJobData ccspecs.BaseJob) {
 	}
 }
 
-func unmarshalJob(payload string) (ccspecs.BaseJob, error) {
-	var job ccspecs.BaseJob
+func unmarshalJob(payload string) (schema.Job, error) {
+	var job schema.Job
 	err := json.Unmarshal([]byte(payload), &job)
 	if err != nil {
 		cclog.ComponentError("ClusterManager", fmt.Sprintf("Failed to decode job payload: %s", payload))
@@ -458,7 +458,7 @@ func NewClusterManager(ctrl controller.Controller, config json.RawMessage) (Clus
 	return cm, nil
 }
 
-func (cm *clusterManager) JobPopulateSubcluster(job *ccspecs.BaseJob) error {
+func (cm *clusterManager) JobPopulateSubcluster(job *schema.Job) error {
 	// Search the job's hostnames and find the respective subcluster
 	if len(job.Resources) == 0 {
 		// This case can only occur if someone is sending 'bad' start_job events without resources

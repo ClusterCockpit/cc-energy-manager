@@ -17,7 +17,7 @@ import (
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
-	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
+	"github.com/ClusterCockpit/cc-lib/schema"
 )
 
 type jobManagerConfig struct {
@@ -43,7 +43,7 @@ type JobManager struct {
 	optimizeTicker    *time.Ticker
 	started           bool
 	cfg               jobManagerConfig
-	job               ccspecs.BaseJob
+	job               schema.Job
 	deviceType        string
 	warmUpIterCount   int
 	warmUpDone        bool
@@ -51,7 +51,7 @@ type JobManager struct {
 	ctrl              controller.Controller
 }
 
-func NewJobManager(ctrl controller.Controller, deviceType string, job ccspecs.BaseJob, rawCfg json.RawMessage) (*JobManager, error) {
+func NewJobManager(ctrl controller.Controller, deviceType string, job schema.Job, rawCfg json.RawMessage) (*JobManager, error) {
 	var cfg jobManagerConfig
 
 	err := json.Unmarshal(rawCfg, &cfg)
