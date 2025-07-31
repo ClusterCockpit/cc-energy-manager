@@ -81,9 +81,9 @@ func (a *LastAggregator) AggregateMetric(m lp.CCMessage) {
 	}
 }
 
-func (a *LastAggregator) GetPdpPerTarget() map[Target]float64 {
-	// calculate power delay product (PDP) per host and per device
-	pdp := make(map[string]map[string]float64)
+func (a *LastAggregator) GetEdpPerTarget() map[Target]float64 {
+	// calculate power delay product () per host and per device
+	edp := make(map[string]map[string]float64)
 
 	for hostname, deviceIdToPowerSamples := range a.powerSamples {
 		deviceIdToPerformanceSamples, ok := a.performanceSamples[hostname]
@@ -93,7 +93,7 @@ func (a *LastAggregator) GetPdpPerTarget() map[Target]float64 {
 			continue
 		}
 
-		pdp[hostname] = make(map[string]float64)
+		edp[hostname] = make(map[string]float64)
 
 		for deviceId, powerSample := range deviceIdToPowerSamples {
 			performanceSample, ok := deviceIdToPerformanceSamples[deviceId]
@@ -102,9 +102,9 @@ func (a *LastAggregator) GetPdpPerTarget() map[Target]float64 {
 				continue
 			}
 
-			pdp[hostname][deviceId] = powerSample / performanceSample
+			edp[hostname][deviceId] = powerSample / (performanceSample * performanceSample)
 		}
 	}
 
-	return DevicePdpToTargetPdp(pdp, a.useMax)
+	return DeviceEdpToTargetEdp(edp, a.useMax)
 }

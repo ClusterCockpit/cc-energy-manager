@@ -233,11 +233,11 @@ func (j *JobManager) Start() {
 				}
 				j.aggregator.AggregateMetric(inputVal)
 			case <-j.optimizeTicker.C:
-				pdpPerTarget := j.aggregator.GetPdpPerTarget()
+				edpPerTarget := j.aggregator.GetEdpPerTarget()
 				if !j.warmUpDone {
-					j.UpdateWarmup(pdpPerTarget)
+					j.UpdateWarmup(edpPerTarget)
 				} else {
-					j.UpdateNormal(pdpPerTarget)
+					j.UpdateNormal(edpPerTarget)
 				}
 
 				maxDuration := time.Duration(j.job.Walltime) * time.Second
@@ -250,7 +250,7 @@ func (j *JobManager) Start() {
 	}()
 }
 
-func (j *JobManager) UpdateWarmup(pdpPerTarget map[aggregator.Target]float64) {
+func (j *JobManager) UpdateWarmup(edpPerTarget map[aggregator.Target]float64) {
 	// TODO IMPORTANT: Afaik there is currently no logic which checks, whether we have
 	// received any new messages or not. If something is misconfigured we will happily optimize
 	// on garbage/out-of-date data. This is undesirable behavior.
@@ -258,7 +258,7 @@ func (j *JobManager) UpdateWarmup(pdpPerTarget map[aggregator.Target]float64) {
 	j.warmUpDone = true
 
 	for target, optimizer := range j.targetToOptimizer {
-		pdp, ok := pdpPerTarget[target]
+		edp, ok := edpPerTarget[target]
 		if !ok {
 			if j.warmUpIterCount >= 10 {
 				cclog.Errorf("Unable to warmup. We didn't receive power and performance metrics for 10 iterations. Make sure the configured metrics are available.")
@@ -267,13 +267,13 @@ func (j *JobManager) UpdateWarmup(pdpPerTarget map[aggregator.Target]float64) {
 			continue
 		}
 
-		optimum, warmUpDoneTarget := optimizer.Start(pdp)
+		optimum, warmUpDoneTarget := optimizer.Start(edp)
 		if !warmUpDoneTarget {
 			// If just a single optimizer is not warmed up, don't go over to normal operation.
 			j.warmUpDone = false
 		}
 		optimumStr := fmt.Sprintf("%f", optimum)
-		j.Debug("%v: pdp=%f --> optimum=%f", target, pdp, optimum)
+		j.Debug("%v: edp=%f --> optimum=%f", target, edp, optimum)
 
 		for _, device := range j.targetToDevices[target] {
 			j.ctrl.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimumStr)
@@ -292,12 +292,12 @@ func (j *JobManager) UpdateWarmup(pdpPerTarget map[aggregator.Target]float64) {
 	j.Debug("Warmup done! Took %d iterations.", j.warmUpIterCount)
 }
 
-func (j *JobManager) UpdateNormal(pdpPerTarget map[aggregator.Target]float64) {
+func (j *JobManager) UpdateNormal(edpPerTarget map[aggregator.Target]float64) {
 	for target, optimizer := range j.targetToOptimizer {
-		pdp := pdpPerTarget[target]
+		edp := edpPerTarget[target]
 
-		optimum := fmt.Sprintf("%f", optimizer.Update(pdp))
-		j.Debug("%v: pdp=%f --> optimum=%s", target, pdp, optimum)
+		optimum := fmt.Sprintf("%f", optimizer.Update(edp))
+		j.Debug("%v: edp=%f --> optimum=%s", target, edp, optimum)
 
 		for _, device := range j.targetToDevices[target] {
 			j.ctrl.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimum)

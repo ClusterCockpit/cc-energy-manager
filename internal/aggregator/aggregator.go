@@ -16,11 +16,11 @@ import (
 type Aggregator interface {
 	// Add a metric to this aggregator
 	AggregateMetric(m lp.CCMessage)
-	// Get the current PDP vor all known targets.
-	// The returned map maps all available target names to PDP.
+	// Get the current EDP vor all known targets.
+	// The returned map maps all available target names to EDP.
 	// If metrics for certain hosts or devices have not yet been received,
 	// they will not be present in this map. Your code should handle this accordingly
-	GetPdpPerTarget() map[Target]float64
+	GetEdpPerTarget() map[Target]float64
 }
 
 type Target struct {
@@ -95,55 +95,55 @@ func (t Target) String() string {
 	return t.HostName
 }
 
-// This function receives a map `map[hostname]map[deviceId]pdp` and
-// returns a `map[targetName]pdp`.
+// This function receives a map `map[hostname]map[deviceId]edp` and
+// returns a `map[targetName]edp`.
 // All target scopes are calculated, regardless of the actual scope used.
 // The upper scopes are calculated by averaging the values. Perhaps we should make
 // this configurable.
-func DevicePdpToTargetPdp(pdpMap map[string]map[string]float64, useMax bool) map[Target]float64 {
-	jobPdp := 0.0
+func DeviceEdpToTargetEdp(edpMap map[string]map[string]float64, useMax bool) map[Target]float64 {
+	jobEdp := 0.0
 	jobNumDevices := 0
 
-	targetPdp := make(map[Target]float64)
+	targetEdp := make(map[Target]float64)
 
-	for hostname, deviceIdToPdp := range pdpMap {
-		hostPdp := 0.0
+	for hostname, deviceIdToEdp := range edpMap {
+		hostEdp := 0.0
 		hostNumDevices := 0
 
-		for deviceId, pdp := range deviceIdToPdp {
+		for deviceId, edp := range deviceIdToEdp {
 			if useMax {
-				hostPdp = max(hostPdp, pdp)
+				hostEdp = max(hostEdp, edp)
 			} else {
-				hostPdp += pdp
+				hostEdp += edp
 			}
 			hostNumDevices++
 
-			targetPdp[DeviceScopeTarget(hostname, deviceId)] = pdp
+			targetEdp[DeviceScopeTarget(hostname, deviceId)] = edp
 		}
 
 		if useMax {
-			jobPdp = max(jobPdp, hostPdp)
+			jobEdp = max(jobEdp, hostEdp)
 		} else {
-			jobPdp += hostPdp
+			jobEdp += hostEdp
 		}
 		jobNumDevices += hostNumDevices
 
 		if hostNumDevices > 0 {
 			if !useMax {
-				hostPdp /= float64(hostNumDevices)
+				hostEdp /= float64(hostNumDevices)
 			}
-			targetPdp[NodeScopeTarget(hostname)] = hostPdp
+			targetEdp[NodeScopeTarget(hostname)] = hostEdp
 		}
 	}
 
 	if jobNumDevices > 0 {
 		if !useMax {
-			jobPdp /= float64(jobNumDevices)
+			jobEdp /= float64(jobNumDevices)
 		}
-		targetPdp[JobScopeTarget()] = jobPdp
+		targetEdp[JobScopeTarget()] = jobEdp
 	}
 
-	return targetPdp
+	return targetEdp
 }
 
 func checkAndGetMetricFields(m lp.CCMessage, wantedDeviceType string) (hostname string, deviceId string, value float64, ok bool) {

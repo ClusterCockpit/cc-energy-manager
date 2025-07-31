@@ -104,12 +104,12 @@ func (a *MedianAggregator) AggregateMetric(m lp.CCMessage) {
 	}
 }
 
-func (a *MedianAggregator) GetPdpPerTarget() map[Target]float64 {
-	// calculate power delay product (PDP) per host and per device
-	pdp := make(map[string]map[string]float64)
+func (a *MedianAggregator) GetEdpPerTarget() map[Target]float64 {
+	// calculate energy delay product (EDP) per host and per device
+	edp := make(map[string]map[string]float64)
 
 	for hostname, deviceIdToState := range a.devices {
-		pdp[hostname] = make(map[string]float64)
+		edp[hostname] = make(map[string]float64)
 
 		for deviceId, deviceState := range deviceIdToState {
 			if len(deviceState.powerSamples) == 0 && len(deviceState.performanceSamples) == 0 {
@@ -121,12 +121,12 @@ func (a *MedianAggregator) GetPdpPerTarget() map[Target]float64 {
 			// The length of both sample arrays is always > 0, thus Median can't fail.
 			powerMedian, _ := util.Median(deviceState.powerSamples)
 			performanceMedian, _ := util.Median(deviceState.performanceSamples)
-			pdp[hostname][deviceId] = powerMedian / performanceMedian
+			edp[hostname][deviceId] = powerMedian / (performanceMedian * performanceMedian)
 
 			deviceState.powerReset = true
 			deviceState.performanceReset = true
 		}
 	}
 
-	return DevicePdpToTargetPdp(pdp, a.useMax)
+	return DeviceEdpToTargetEdp(edp, a.useMax)
 }
