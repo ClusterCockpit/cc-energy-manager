@@ -112,7 +112,7 @@ func (a *MedianAggregator) GetEdpPerTarget() map[Target]float64 {
 		edp[hostname] = make(map[string]float64)
 
 		for deviceId, deviceState := range deviceIdToState {
-			if len(deviceState.powerSamples) == 0 && len(deviceState.performanceSamples) == 0 {
+			if len(deviceState.powerSamples) == 0 || len(deviceState.performanceSamples) == 0 {
 				// Initially it may happen that we haven't received a performance sample yet.
 				// Ignore, since it will hopefully arrive until the next iteration.
 				continue
