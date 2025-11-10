@@ -13,10 +13,11 @@ import (
 )
 
 type LastAggregatorConfig struct {
-	DeviceType        string `json:"deviceType"`
-	PowerMetric       string `json:"powerMetric"`
-	PerformanceMetric string `json:"performanceMetric"`
-	UseMax            bool   `json:"useMax"`
+	DeviceType        string  `json:"deviceType"`
+	BasePower         float64 `json:"basePower"`
+	PowerMetric       string  `json:"powerMetric"`
+	PerformanceMetric string  `json:"performanceMetric"`
+	UseMax            bool    `json:"useMax"`
 }
 
 type LastAggregator struct {
@@ -26,6 +27,7 @@ type LastAggregator struct {
 	powerMetric        string
 	performanceMetric  string
 	deviceType         string
+	basePower          float64
 	useMax             bool
 }
 
@@ -49,6 +51,7 @@ func NewLastAggregator(rawConfig json.RawMessage) (*LastAggregator, error) {
 	ag.powerSamples = make(map[string]map[string]float64)
 	ag.performanceSamples = make(map[string]map[string]float64)
 	ag.deviceType = config.DeviceType
+	ag.basePower = config.BasePower
 	ag.useMax = config.UseMax
 
 	return ag, nil
@@ -102,7 +105,7 @@ func (a *LastAggregator) GetEdpPerTarget() map[Target]float64 {
 				continue
 			}
 
-			edp[hostname][deviceId] = powerSample / (performanceSample * performanceSample)
+			edp[hostname][deviceId] = (powerSample + a.basePower) / (performanceSample * performanceSample)
 		}
 	}
 

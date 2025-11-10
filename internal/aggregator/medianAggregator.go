@@ -15,6 +15,7 @@ import (
 
 type MedianAggregatorConfig struct {
 	DeviceType        string `json:"deviceType"`
+	BasePower         float64 `json:"basePower"`
 	PowerMetric       string `json:"powerMetric"`
 	PerformanceMetric string `json:"performanceMetric"`
 	UseMax            bool   `json:"useMax"`
@@ -33,6 +34,7 @@ type MedianAggregator struct {
 	powerMetric        string
 	performanceMetric  string
 	deviceType         string
+	basePower          float64
 	useMax             bool
 }
 
@@ -55,6 +57,7 @@ func NewMedianAggregator(rawConfig json.RawMessage) (*MedianAggregator, error) {
 	ag.performanceMetric = config.PerformanceMetric
 	ag.devices = make(map[string]map[string]*MedianDeviceState)
 	ag.deviceType = config.DeviceType
+	ag.basePower = config.BasePower
 	ag.useMax = config.UseMax
 
 	return ag, nil
@@ -121,7 +124,7 @@ func (a *MedianAggregator) GetEdpPerTarget() map[Target]float64 {
 			// The length of both sample arrays is always > 0, thus Median can't fail.
 			powerMedian, _ := util.Median(deviceState.powerSamples)
 			performanceMedian, _ := util.Median(deviceState.performanceSamples)
-			edp[hostname][deviceId] = powerMedian / (performanceMedian * performanceMedian)
+			edp[hostname][deviceId] = (powerMedian + a.basePower) / (performanceMedian * performanceMedian)
 
 			deviceState.powerReset = true
 			deviceState.performanceReset = true
