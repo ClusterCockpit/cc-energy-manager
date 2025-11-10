@@ -42,16 +42,18 @@ type JobManager struct {
 	targetToDevices   map[aggregator.Target][]aggregator.Target
 	optimizeTicker    *time.Ticker
 	started           bool
+	stopped           bool
 	cfg               jobManagerConfig
-	job               schema.Job
-	deviceType        string
+	Job               schema.Job
+	DeviceType        string
 	warmUpIterCount   int
 	warmUpDone        bool
 	startTime         time.Time
+	jobManagerStopped chan<- *JobManager
 	ctrl              controller.Controller
 }
 
-func NewJobManager(ctrl controller.Controller, deviceType string, job schema.Job, rawCfg json.RawMessage) (*JobManager, error) {
+func NewJobManager(jobManagerStopped chan<- *JobManager, ctrl controller.Controller, deviceType string, job schema.Job, rawCfg json.RawMessage) (*JobManager, error) {
 	var cfg jobManagerConfig
 
 	err := json.Unmarshal(rawCfg, &cfg)
@@ -77,8 +79,9 @@ func NewJobManager(ctrl controller.Controller, deviceType string, job schema.Job
 		targetToDevices:   make(map[aggregator.Target][]aggregator.Target),
 		cfg:               cfg,
 		aggregator:        agg,
-		job:               job,
-		deviceType:        deviceType,
+		Job:               job,
+		DeviceType:        deviceType,
+		jobManagerStopped: jobManagerStopped,
 		ctrl:              ctrl,
 	}
 
@@ -133,8 +136,8 @@ func (j *JobManager) initScopeJob(rawCfg json.RawMessage) error {
 
 	devices := make([]aggregator.Target, 0)
 
-	for _, resource := range j.job.Resources {
-		for _, deviceId := range j.ctrl.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
+	for _, resource := range j.Job.Resources {
+		for _, deviceId := range j.ctrl.GetDeviceIdsForResources(j.Job.Cluster, j.DeviceType, resource) {
 			devices = append(devices, aggregator.DeviceScopeTarget(resource.Hostname, deviceId))
 		}
 	}
@@ -145,7 +148,7 @@ func (j *JobManager) initScopeJob(rawCfg json.RawMessage) error {
 
 func (j *JobManager) initScopeNode(rawCfg json.RawMessage) error {
 	var err error
-	for _, resource := range j.job.Resources {
+	for _, resource := range j.Job.Resources {
 		/* Create one optimzer for each host */
 		target := aggregator.NodeScopeTarget(resource.Hostname)
 		j.targetToOptimizer[target], err = optimizer.NewOptimizer(rawCfg)
@@ -155,7 +158,7 @@ func (j *JobManager) initScopeNode(rawCfg json.RawMessage) error {
 
 		devices := make([]aggregator.Target, 0)
 
-		for _, deviceId := range j.ctrl.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
+		for _, deviceId := range j.ctrl.GetDeviceIdsForResources(j.Job.Cluster, j.DeviceType, resource) {
 			devices = append(devices, aggregator.DeviceScopeTarget(resource.Hostname, deviceId))
 		}
 
@@ -166,8 +169,8 @@ func (j *JobManager) initScopeNode(rawCfg json.RawMessage) error {
 
 func (j *JobManager) initScopeDevice(rawCfg json.RawMessage) error {
 	var err error
-	for _, resource := range j.job.Resources {
-		for _, deviceId := range j.ctrl.GetDeviceIdsForResources(j.job.Cluster, j.deviceType, resource) {
+	for _, resource := range j.Job.Resources {
+		for _, deviceId := range j.ctrl.GetDeviceIdsForResources(j.Job.Cluster, j.DeviceType, resource) {
 			/* Create one optimizer for each device on a host to optimize. */
 			target := aggregator.DeviceScopeTarget(resource.Hostname, deviceId)
 			j.targetToOptimizer[target], err = optimizer.NewOptimizer(rawCfg)
@@ -189,6 +192,12 @@ func (j *JobManager) AddInput(input chan lp.CCMessage) {
 func (j *JobManager) Close() {
 	if !j.started {
 		j.Debug("Not started, thus not closing")
+		return
+	}
+
+	if j.stopped {
+		// Defacto same condition as above, but don't write to the log, since this
+		// is an expected case when a job times out.
 		return
 	}
 
@@ -224,6 +233,11 @@ func (j *JobManager) Start() {
 				j.optimizeTicker.Stop()
 				j.ResetToDefault()
 				j.wg.Done()
+				j.stopped = true
+
+				// Tell the ClusterManager which JobManager (us) terminated, to that it can
+				// be removed from the internal list
+				j.jobManagerStopped <- j
 				return
 			case inputVal := <-j.Input:
 				if !j.ManagesDeviceOfMetric(inputVal) {
@@ -240,9 +254,9 @@ func (j *JobManager) Start() {
 					j.UpdateNormal(edpPerTarget)
 				}
 
-				maxDuration := time.Duration(j.job.Walltime) * time.Second
-				if j.job.Walltime > 0 && j.startTime.Add(maxDuration).Before(time.Now()) {
-					j.Debug("Job exceeded maximum walltime (%v). Stopping job manager...", j.job.Walltime)
+				maxDuration := time.Duration(j.Job.Walltime) * time.Second
+				if j.Job.Walltime > 0 && j.startTime.Add(maxDuration).Before(time.Now()) {
+					j.Debug("Job exceeded maximum walltime (%v). Stopping job manager...", j.Job.Walltime)
 					j.done <- struct{}{}
 				}
 			}
@@ -276,7 +290,7 @@ func (j *JobManager) UpdateWarmup(edpPerTarget map[aggregator.Target]float64) {
 		j.Debug("%v: edp=%f --> optimum=%f", target, edp, optimum)
 
 		for _, device := range j.targetToDevices[target] {
-			j.ctrl.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimumStr)
+			j.ctrl.Set(j.Job.Cluster, device.HostName, j.DeviceType, device.DeviceId, j.cfg.ControlName, optimumStr)
 		}
 	}
 
@@ -300,7 +314,7 @@ func (j *JobManager) UpdateNormal(edpPerTarget map[aggregator.Target]float64) {
 		j.Debug("%v: edp=%f --> optimum=%s", target, edp, optimum)
 
 		for _, device := range j.targetToDevices[target] {
-			j.ctrl.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, optimum)
+			j.ctrl.Set(j.Job.Cluster, device.HostName, j.DeviceType, device.DeviceId, j.cfg.ControlName, optimum)
 		}
 	}
 }
@@ -316,7 +330,7 @@ func (j *JobManager) ResetToDefault() {
 	j.Debug("Resetting device to default value...")
 	for target := range j.targetToOptimizer {
 		for _, device := range j.targetToDevices[target] {
-			j.ctrl.Set(j.job.Cluster, device.HostName, j.deviceType, device.DeviceId, j.cfg.ControlName, v)
+			j.ctrl.Set(j.Job.Cluster, device.HostName, j.DeviceType, device.DeviceId, j.cfg.ControlName, v)
 		}
 	}
 }
@@ -331,7 +345,7 @@ func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
 		return false
 	}
 
-	if deviceType != j.deviceType {
+	if deviceType != j.DeviceType {
 		// Metric device type doesn't belong to the device type that we want to optimizer for
 		return false
 	}
@@ -344,9 +358,9 @@ func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
 		return false
 	}
 
-	for _, r := range j.job.Resources {
+	for _, r := range j.Job.Resources {
 		if r.Hostname == metricHost {
-			deviceIds := j.ctrl.GetDeviceIdsForResources(j.job.Cluster, deviceType, r)
+			deviceIds := j.ctrl.GetDeviceIdsForResources(j.Job.Cluster, deviceType, r)
 
 			// If the metric's deviceId is present in the list of devices associated with this job manager,
 			// accept the message. If not, discard the message
@@ -400,12 +414,12 @@ func (j *JobManager) deviceCount() int {
 }
 
 func (j *JobManager) Debug(fmtstr string, args ...any) {
-	subCluster := j.job.SubCluster
+	subCluster := j.Job.SubCluster
 	if subCluster == "" {
 		// This makes the messages a bit less confusing when SubCluster is blank
 		subCluster = "<empty>"
 	}
-	component := fmt.Sprintf("JobManager(%s,%s,%s,%d)", j.job.Cluster, subCluster, j.deviceType, j.job.JobID)
+	component := fmt.Sprintf("JobManager(%s,%s,%s,%d)", j.Job.Cluster, subCluster, j.DeviceType, j.Job.JobID)
 	msg := fmt.Sprintf(fmtstr, args...)
 	cclog.ComponentDebug(component, msg)
 }

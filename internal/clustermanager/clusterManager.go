@@ -51,6 +51,7 @@ type clusterManager struct {
 	wg                 sync.WaitGroup
 	input              chan lp.CCMessage
 	output             chan lp.CCMessage
+	jobManagerStopped  chan *jobmanager.JobManager
 	ctrl               controller.Controller
 }
 
@@ -162,19 +163,7 @@ func (cm *clusterManager) StopJob(stopJobData schema.Job) {
 
 	// Stop all JobManagers (multiple ones for each device type)
 	for _, jobManager := range job.deviceTypeToJobMgr {
-		jobManager.Close()
-	}
-
-	delete(cluster.jobIdToJob, job.data.JobID)
-
-	// Delete assocation between a cluster's hostname and the job IDs running on that host.
-	for _, r := range job.data.Resources {
-		delete(cluster.hostToJobs[r.Hostname], job.data.JobID)
-	}
-
-	err := cm.UpdateJobPowerLimits(job.data.Cluster)
-	if err != nil {
-		cclog.Errorf("UpdateJobPowerLimits failed: %v", err)
+		cm.unregisterJobManager(jobManager)
 	}
 }
 
@@ -234,7 +223,7 @@ func (cm *clusterManager) registerJobManager(job *Job, deviceType string) {
 		return
 	}
 
-	jm, err := jobmanager.NewJobManager(cm.ctrl, deviceType, job.data, jobManagerConfig)
+	jm, err := jobmanager.NewJobManager(cm.jobManagerStopped, cm.ctrl, deviceType, job.data, jobManagerConfig)
 	if err != nil {
 		cclog.Errorf("Unable to create job manager: %v", err)
 		return
@@ -251,6 +240,44 @@ func (cm *clusterManager) registerJobManager(job *Job, deviceType string) {
 	// 100000 should be plenty for incoming CCMessages
 	jm.AddInput(make(chan lp.CCMessage, 100000))
 	jm.Start()
+}
+
+func (cm *clusterManager) unregisterJobManager(jm *jobmanager.JobManager) {
+	jobId := jm.Job.JobID
+	clusterName := jm.Job.Cluster
+	deviceType := jm.DeviceType
+
+	cluster, ok := cm.clusters[clusterName]
+	if !ok {
+		cclog.Errorf("Cannot unregister job '%d' on cluster '%s', which we never registered as cluster", jobId, clusterName)
+		return
+	}
+
+	job, ok := cluster.jobIdToJob[jobId]
+	if !ok {
+		cclog.Debugf("Cannot unregister job '%d' on cluster '%s', which isn't registered", jobId, clusterName)
+		return
+	}
+
+	cclog.Debugf("Stopping JobManager cluster=%s jobId=%d deviceType=%s", clusterName, job.data.JobID, deviceType)
+	jm.Close()
+
+	delete(job.deviceTypeToJobMgr, deviceType)
+
+	// We possibly have multiple job managers per job (for each deviceType)
+	// If all of them are terminated, unregister the job entirely.
+	if len(job.deviceTypeToJobMgr) == 0 {
+		delete(cluster.jobIdToJob, jobId)
+
+		for _, r := range job.data.Resources {
+			delete(cluster.hostToJobs[r.Hostname], job.data.JobID)
+		}
+	}
+
+	err := cm.UpdateJobPowerLimits(job.data.Cluster)
+	if err != nil {
+		cclog.Errorf("UpdateJobPowerLimits failed: %v", err)
+	}
 }
 
 func (cm *clusterManager) StartJob(startJobData schema.Job) {
@@ -412,6 +439,8 @@ func (cm *clusterManager) Start() {
 				}
 				cm.wg.Done()
 				return
+			case jm := <-cm.jobManagerStopped:
+				cm.unregisterJobManager(jm)
 			case m := <-cm.input:
 				mtype := m.MessageType()
 
