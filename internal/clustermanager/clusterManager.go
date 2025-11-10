@@ -345,7 +345,7 @@ func unmarshalJob(payload string) (schema.Job, error) {
 func (cm *clusterManager) processMetric(msg lp.CCMessage) {
 	// Forward this metric to all JobManagers running on nodes,
 	// that are currently associated with the message's hostname.
-	if !msg.IsMetric() {
+	if msg.MessageType() != lp.CCMSG_TYPE_METRIC {
 		cclog.ComponentError("ClusterManager", "Incoming message is not a metric: %+v", msg)
 		return
 	}
