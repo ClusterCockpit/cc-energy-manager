@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.9
 
 require (
-	github.com/ClusterCockpit/cc-lib v0.10.1
+	github.com/ClusterCockpit/cc-lib v1.0.2
 	github.com/ClusterCockpit/cc-node-controller v0.1.0
 )
 
@@ -34,9 +34,9 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1 // indirect
 	github.com/stmcginnis/gofish v0.20.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
-	golang.org/x/crypto v0.43.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
-	golang.org/x/net v0.46.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
