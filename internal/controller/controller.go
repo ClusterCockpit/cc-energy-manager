@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"sync"
 	"strings"
+	"sync"
 	"time"
 
 	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"

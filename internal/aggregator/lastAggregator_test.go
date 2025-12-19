@@ -139,7 +139,7 @@ func TestAggregateMultipleHosts(t *testing.T) {
 
 	for i, host := range hosts {
 		target := Target{HostName: host, DeviceId: "0"}
-		expectedEdp := power[i]/(instructions[i] * instructions[i])
+		expectedEdp := power[i] / (instructions[i] * instructions[i])
 		if edp[target] != expectedEdp {
 			t.Errorf("expected %f, got %f", expectedEdp, edp[target])
 		}

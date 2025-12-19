@@ -14,11 +14,11 @@ import (
 )
 
 type MedianAggregatorConfig struct {
-	DeviceType        string `json:"deviceType"`
+	DeviceType        string  `json:"deviceType"`
 	BasePower         float64 `json:"basePower"`
-	PowerMetric       string `json:"powerMetric"`
-	PerformanceMetric string `json:"performanceMetric"`
-	UseMax            bool   `json:"useMax"`
+	PowerMetric       string  `json:"powerMetric"`
+	PerformanceMetric string  `json:"performanceMetric"`
+	UseMax            bool    `json:"useMax"`
 }
 
 type MedianDeviceState struct {
@@ -30,12 +30,12 @@ type MedianDeviceState struct {
 
 type MedianAggregator struct {
 	// map[hostname]map[deviceId]MedianDeviceState
-	devices            map[string]map[string]*MedianDeviceState
-	powerMetric        string
-	performanceMetric  string
-	deviceType         string
-	basePower          float64
-	useMax             bool
+	devices           map[string]map[string]*MedianDeviceState
+	powerMetric       string
+	performanceMetric string
+	deviceType        string
+	basePower         float64
+	useMax            bool
 }
 
 func NewMedianAggregator(rawConfig json.RawMessage) (*MedianAggregator, error) {
@@ -69,7 +69,6 @@ func (a *MedianAggregator) AggregateMetric(m lp.CCMessage) {
 		return
 	}
 
-
 	var deviceState *MedianDeviceState
 	if m.Name() == a.powerMetric || m.Name() == a.performanceMetric {
 		devicesOfHostState, ok := a.devices[hostname]
@@ -81,7 +80,7 @@ func (a *MedianAggregator) AggregateMetric(m lp.CCMessage) {
 		deviceState, ok = devicesOfHostState[deviceId]
 		if !ok {
 			deviceState = &MedianDeviceState{
-				powerSamples: make([]float64, 0),
+				powerSamples:       make([]float64, 0),
 				performanceSamples: make([]float64, 0),
 			}
 			devicesOfHostState[deviceId] = deviceState
