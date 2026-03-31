@@ -37,6 +37,7 @@ type SubCluster struct {
 	subClusterId                SubClusterId
 	deviceTypeToOptimizerConfig map[string]json.RawMessage
 	hostRegex                   *regexp.Regexp
+	partitionRegex              *regexp.Regexp
 }
 
 type Job struct {
@@ -76,6 +77,7 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 		SubCluster       *string                    `json:"subcluster"`
 		DeviceTypes      map[string]json.RawMessage `json:"devicetypes"`
 		HostRegex        *string                    `json:"hostRegex"`
+		PartitionRegex   *string                    `json:"partitionRegex"`
 		PowerBudgetTotal float64                    `json:"powerBudgetTotal"`
 	}{}
 
@@ -114,10 +116,16 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 		return fmt.Errorf("Cluster defined twice in config file: '%+v'", subClusterId)
 	}
 
+	if clusterConfig.PartitionRegex == nil {
+		// If no partition is set, allow this subcluster to accept all partitions
+		clusterConfig.PartitionRegex = new("^.*$")
+	}
+
 	cluster.subClusters[*clusterConfig.SubCluster] = &SubCluster{
 		subClusterId:                subClusterId,
 		deviceTypeToOptimizerConfig: clusterConfig.DeviceTypes,
 		hostRegex:                   regexp.MustCompile(*clusterConfig.HostRegex),
+		partitionRegex:              regexp.MustCompile(*clusterConfig.PartitionRegex),
 	}
 	return nil
 }
@@ -302,6 +310,11 @@ func (cm *clusterManager) StartJob(startJobData schema.Job) {
 	subCluster, ok := cluster.subClusters[startJobData.SubCluster]
 	if !ok {
 		cclog.Warnf("Cannot start job for unknown subcluster '%s': %+v", startJobData.SubCluster, startJobData)
+		return
+	}
+
+	if !subCluster.partitionRegex.MatchString(startJobData.Partition) {
+		cclog.Debugf("Ignoring job (%s, %s, %d), which doesn't have a whitelisted partition", cluster, subCluster, startJobData.JobID, startJobData.Partition)
 		return
 	}
 

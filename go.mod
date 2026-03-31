@@ -1,8 +1,6 @@
 module github.com/ClusterCockpit/cc-energy-manager
 
-go 1.24.0
-
-toolchain go1.24.9
+go 1.26.0
 
 require (
 	github.com/ClusterCockpit/cc-lib v1.0.2
