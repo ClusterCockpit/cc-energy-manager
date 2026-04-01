@@ -8,7 +8,7 @@ EXECUTABLES = go
 K := $(foreach exec,$(EXECUTABLES),\
         $(if $(shell which $(exec)),some string,$(error "No $(exec) in PATH")))
 
-.PHONY: clean distclean test tags $(TARGET)
+.PHONY: $(TARGET) clean distclean test tags fmt vet
 
 .NOTPARALLEL:
 
@@ -33,3 +33,11 @@ test:
 tags:
 	$(info ===>  TAGS)
 	@ctags -R
+
+fmt:
+	$(info ===>  FORMAT)
+	@go fmt ./...
+
+vet:
+	$(info ===>  VET)
+	@go vet ./...
