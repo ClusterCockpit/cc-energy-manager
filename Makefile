@@ -21,9 +21,7 @@ clean:
 	@go clean
 	@rm -f $(TARGET)
 
-distclean:
-	@$(MAKE) clean
-	$(info ===>  DISTCLEAN)
+distclean: clean
 
 test:
 	$(info ===>  TESTING)
