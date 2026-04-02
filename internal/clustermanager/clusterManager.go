@@ -314,7 +314,7 @@ func (cm *clusterManager) StartJob(startJobData schema.Job) {
 	}
 
 	if !subCluster.partitionRegex.MatchString(startJobData.Partition) {
-		cclog.Debugf("Ignoring job (%s, %s, %d), which isn't a whitelisted partition (%s)", startJobData.Cluster, startJobData.SubCluster, startJobData.JobID, startJobData.Partition)
+		cclog.Debugf("Ignoring job (%s, %s, %d), which isn't on a whitelisted partition (%s ~= %s failed)", startJobData.Cluster, startJobData.SubCluster, startJobData.JobID, startJobData.Partition, subCluster.partitionRegex.String())
 		return
 	}
 
