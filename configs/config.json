@@ -15,88 +15,98 @@
     },
     "clusters": [
         {
-            "cluster": "fritz",
-            "subcluster": "main",
-            "hostRegex": "^f\\d\\d\\d\\d$",
+            "name": "fritz",
             "powerBudgetTotal": 10000,
-            "devicetypes" : {
-                "socket" : {
-                    "scope": "node",
-                    "aggregator": {
-                        "type": "last",
-                        "powerMetric": "cpu_energy",
-                        "performanceMetric": "ips",
-                        "deviceType": "socket"
-                    },
-                    "controlName": "rapl.pkg_power_limit1",
-                    "controlDefaultValue": 300,
-                    "intervalConverged": "10m",
-                    "intervalSearch": "2m",
-                    "powerBudgetWeight": 1,
-                    "optimizer": {
-                        "type": "gss",
-                        "tolerance": 5,
-                        "borders": {
-                            "lower": 123,
-                            "upper": 800
+            "partitionRegex": "^energy_efficient$",
+            "subclusters": [
+                {
+                    "name": "main",
+                    "hostRegex": "^f\\d\\d\\d\\d$",
+                    "devicetypes" : {
+                        "socket" : {
+                            "scope": "node",
+                            "aggregator": {
+                                "type": "last",
+                                "powerMetric": "cpu_energy",
+                                "performanceMetric": "ips",
+                                "deviceType": "socket"
+                            },
+                            "controlName": "rapl.pkg_power_limit1",
+                            "controlDefaultValue": 300,
+                            "intervalConverged": "10m",
+                            "intervalSearch": "2m",
+                            "powerBudgetWeight": 1,
+                            "optimizer": {
+                                "type": "gssng",
+                                "tolerance": 5,
+                                "borders": {
+                                    "lower": 123,
+                                    "upper": 800
+                                }
+                            }
                         }
                     }
                 }
-            }
+            ]
         },
         {
-            "cluster": "alex",
-            "subcluster": "a100",
-            "hostRegex": "^a\\d\\d\\d\\d$",
+            "name": "alex",
             "powerBudgetTotal": 20000,
-            "devicetypes": {
-                "nvidia_gpu" : {
-                    "scope": "device",
-                    "aggregator": {
-                        "type": "last",
-                        "powerMetric": "acc_power",
-                        "performanceMetric": "kernels",
-                        "deviceType": "nvidia_gpu"
-                    },
-                    "controlName": "nvml.power_limit",
-                    "controlDefaultValue": 250,
-                    "intervalConverged": "5m",
-                    "intervalSearch": "2m",
-                    "powerBudgetWeight": 2,
-                    "optimizer": {
-                        "type": "gss",
-                        "tolerance": 5,
-                        "borders": {
-                            "lower": 123,
-                            "upper": 800
-                        }
-                    }
-                },
-                "socket" :{
-                    "cluster": "alex",
-                    "subcluster": "a100",
-                    "scope": "job",
-                    "aggregator": {
-                        "type": "median",
-                        "powerMetric": "cpu_energy",
-                        "performanceMetric": "ips",
-                        "deviceType": "nvidia_gpu"
-                    },
-                    "controlName": "rapl.pkg_power_limit1",
-                    "controlDefaultValue": 100,
-                    "intervalConverged": "5m",
-                    "intervalSearch": "2m",
-                    "powerBudgetWeight": 1,
-                    "optimizer": {
-                        "type": "gss",
-                        "tolerance": 5,
-                        "borders": {
-                            "lower": 123,
-                            "upper": 800
+            "partitionRegex": "^only_this_partition_please$",
+            "subclusters": [
+                {
+                    "name": "a100",
+                    "hostRegex": "^a\\d\\d\\d\\d$",
+                    "devicetypes": {
+                        "nvidia_gpu" : {
+                            "scope": "device",
+                            "aggregator": {
+                                "type": "last",
+                                "powerMetric": "acc_power",
+                                "performanceMetric": "kernels",
+                                "deviceType": "nvidia_gpu"
+                            },
+                            "controlName": "nvml.power_limit",
+                            "controlDefaultValue": 250,
+                            "intervalConverged": "5m",
+                            "intervalSearch": "2m",
+                            "powerBudgetWeight": 2,
+                            "optimizer": {
+                                "type": "gss",
+                                "tolerance": 5,
+                                "borders": {
+                                    "lower": 123,
+                                    "upper": 800
+                                }
+                            }
+                        },
+                        "socket" :{
+                            "cluster": "alex",
+                            "subcluster": "a100",
+                            "scope": "job",
+                            "aggregator": {
+                                "type": "median",
+                                "powerMetric": "cpu_energy",
+                                "performanceMetric": "ips",
+                                "deviceType": "nvidia_gpu"
+                            },
+                            "controlName": "rapl.pkg_power_limit1",
+                            "controlDefaultValue": 100,
+                            "intervalConverged": "5m",
+                            "intervalSearch": "2m",
+                            "powerBudgetWeight": 1,
+                            "optimizer": {
+                                "type": "gss",
+                                "tolerance": 5,
+                                "borders": {
+                                    "lower": 123,
+                                    "upper": 800
+                                }
+                            }
                         }
                     }
                 }
-            }
+            ]
         }
     ]
 }
