@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"math"
 
-	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
-	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
+	cclog "github.com/ClusterCockpit/cc-lib/v2/ccLogger"
+	lp "github.com/ClusterCockpit/cc-lib/v2/ccMessage"
 )
 
 type Aggregator interface {
@@ -161,7 +161,8 @@ func checkAndGetMetricFields(m lp.CCMessage, wantedDeviceType string) (hostname 
 		return
 	}
 
-	value, err = valueToFloat64(m.GetMetricValue())
+	valueAny, _ := m.GetMetricValue()
+	value, err = valueToFloat64(valueAny)
 	if err != nil {
 		cclog.Errorf("Unable to parse float (%s) from message: %+v", err, m)
 		ok = false

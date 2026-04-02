@@ -15,9 +15,9 @@ import (
 	"github.com/ClusterCockpit/cc-energy-manager/internal/controller"
 	"github.com/ClusterCockpit/cc-energy-manager/internal/optimizer"
 
-	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
-	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
-	"github.com/ClusterCockpit/cc-lib/schema"
+	cclog "github.com/ClusterCockpit/cc-lib/v2/ccLogger"
+	lp "github.com/ClusterCockpit/cc-lib/v2/ccMessage"
+	"github.com/ClusterCockpit/cc-lib/v2/schema"
 )
 
 type jobManagerConfig struct {

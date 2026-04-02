@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
-	ccmessage "github.com/ClusterCockpit/cc-lib/ccMessage"
+	cclog "github.com/ClusterCockpit/cc-lib/v2/ccLogger"
+	ccmessage "github.com/ClusterCockpit/cc-lib/v2/ccMessage"
 )
 
 var ts time.Time

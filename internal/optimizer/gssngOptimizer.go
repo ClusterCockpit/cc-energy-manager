@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 
-	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
+	cclog "github.com/ClusterCockpit/cc-lib/v2/ccLogger"
 )
 
 type ProbeMode int

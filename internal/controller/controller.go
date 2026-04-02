@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
-	ccspecs "github.com/ClusterCockpit/cc-lib/schema"
+	cclog "github.com/ClusterCockpit/cc-lib/v2/ccLogger"
+	ccspecs "github.com/ClusterCockpit/cc-lib/v2/schema"
 	cccontrol "github.com/ClusterCockpit/cc-node-controller/pkg/ccControlClient"
 )
 

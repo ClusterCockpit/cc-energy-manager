@@ -12,9 +12,9 @@ import (
 
 	"github.com/ClusterCockpit/cc-energy-manager/internal/controller"
 	"github.com/ClusterCockpit/cc-energy-manager/internal/jobmanager"
-	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
-	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
-	"github.com/ClusterCockpit/cc-lib/schema"
+	cclog "github.com/ClusterCockpit/cc-lib/v2/ccLogger"
+	lp "github.com/ClusterCockpit/cc-lib/v2/ccMessage"
+	"github.com/ClusterCockpit/cc-lib/v2/schema"
 )
 
 //	type JobManagerId struct {
@@ -215,7 +215,7 @@ func (cm *clusterManager) cleanupCollidingJobs(job *Job) {
 		cclog.ComponentWarn("ClusterManager", "Cleaning up old jobs, which collide with new job:")
 
 		for _, job := range jobsToStop {
-			cclog.ComponentWarn("ClusterManager", "- [%s] %d", job.Cluster, job.JobID)
+			cclog.ComponentWarnf("ClusterManager", "- [%s] %d", job.Cluster, job.JobID)
 			cm.StopJob(schema.Job{JobID: job.JobID, Cluster: job.Cluster})
 		}
 	}
@@ -349,7 +349,7 @@ func unmarshalJob(payload string) (schema.Job, error) {
 	var job schema.Job
 	err := json.Unmarshal([]byte(payload), &job)
 	if err != nil {
-		cclog.ComponentError("ClusterManager", fmt.Sprintf("Failed to decode job payload: %s", payload))
+		cclog.ComponentErrorf("ClusterManager", "Failed to decode job payload: %s", payload)
 		return job, err
 	}
 	return job, nil
@@ -359,13 +359,13 @@ func (cm *clusterManager) processMetric(msg lp.CCMessage) {
 	// Forward this metric to all JobManagers running on nodes,
 	// that are currently associated with the message's hostname.
 	if msg.MessageType() != lp.CCMSG_TYPE_METRIC {
-		cclog.ComponentError("ClusterManager", "Incoming message is not a metric: %+v", msg)
+		cclog.ComponentErrorf("ClusterManager", "Incoming message is not a metric: %+v", msg)
 		return
 	}
 
 	hostname, ok := msg.GetTag("hostname")
 	if !ok {
-		cclog.ComponentError("ClusterManager", "Incoming message is missing tag 'hostname': %+v", msg)
+		cclog.ComponentErrorf("ClusterManager", "Incoming message is missing tag 'hostname': %+v", msg)
 		return
 	}
 
@@ -373,13 +373,13 @@ func (cm *clusterManager) processMetric(msg lp.CCMessage) {
 	if err != nil {
 		// Even on loglevel debug, this causes a lot of noise if a host is not managed by us.
 		// Perhaps we want to add an explicit ignore list, which would make misconfiguration less likely.
-		//cclog.ComponentError("ClusterManager", "Unable to determine cluster/subcluster for host '%s': %s", hostname, err)
+		//cclog.ComponentErrorf("ClusterManager", "Unable to determine cluster/subcluster for host '%s': %s", hostname, err)
 		return
 	}
 
 	cluster, ok := cm.clusters[subClusterId.Cluster]
 	if !ok {
-		cclog.ComponentError("ClusterManager", "Unable to process metric for unknown cluster:", subClusterId.Cluster)
+		cclog.ComponentErrorf("ClusterManager", "Unable to process metric for unknown cluster: %s", subClusterId.Cluster)
 		return
 	}
 
@@ -414,14 +414,16 @@ func (cm *clusterManager) processEvent(msg lp.CCMessage) {
 
 	switch function {
 	case "start_job":
-		job, err := unmarshalJob(msg.GetEventValue())
+		eventVal, _ := msg.GetEventValue()
+		job, err := unmarshalJob(eventVal)
 		if err != nil {
 			cclog.ComponentError("ClusterManager", err.Error())
 			break
 		}
 		cm.StartJob(job)
 	case "stop_job":
-		job, err := unmarshalJob(msg.GetEventValue())
+		eventVal, _ := msg.GetEventValue()
+		job, err := unmarshalJob(eventVal)
 		if err != nil {
 			cclog.ComponentError("ClusterManager", err.Error())
 			break

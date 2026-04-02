@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
+	cclog "github.com/ClusterCockpit/cc-lib/v2/ccLogger"
 )
 
 type testOptimizerConfig struct {

@@ -13,11 +13,11 @@ import (
 
 	cmanager "github.com/ClusterCockpit/cc-energy-manager/internal/clustermanager"
 	"github.com/ClusterCockpit/cc-energy-manager/internal/controller"
-	cfg "github.com/ClusterCockpit/cc-lib/ccConfig"
-	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
-	lp "github.com/ClusterCockpit/cc-lib/ccMessage"
-	"github.com/ClusterCockpit/cc-lib/receivers"
-	"github.com/ClusterCockpit/cc-lib/sinks"
+	cfg "github.com/ClusterCockpit/cc-lib/v2/ccConfig"
+	cclog "github.com/ClusterCockpit/cc-lib/v2/ccLogger"
+	lp "github.com/ClusterCockpit/cc-lib/v2/ccMessage"
+	"github.com/ClusterCockpit/cc-lib/v2/receivers"
+	"github.com/ClusterCockpit/cc-lib/v2/sinks"
 )
 
 var (

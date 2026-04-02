@@ -9,7 +9,7 @@ import (
 	"os"
 	"testing"
 
-	cclog "github.com/ClusterCockpit/cc-lib/ccLogger"
+	cclog "github.com/ClusterCockpit/cc-lib/v2/ccLogger"
 )
 
 func TestNew(t *testing.T) {
