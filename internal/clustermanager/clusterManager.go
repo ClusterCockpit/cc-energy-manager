@@ -27,17 +27,18 @@ type SubClusterId struct {
 }
 
 type Cluster struct {
+	clusterName      string
 	subClusters      map[string]*SubCluster
 	jobIdToJob       map[int64]*Job
 	hostToJobs       map[string]map[int64]*Job
 	powerBudgetTotal float64
+	partitionRegex   *regexp.Regexp
 }
 
 type SubCluster struct {
 	subClusterId                SubClusterId
 	deviceTypeToOptimizerConfig map[string]json.RawMessage
 	hostRegex                   *regexp.Regexp
-	partitionRegex              *regexp.Regexp
 }
 
 type Job struct {
@@ -73,12 +74,10 @@ func (scid SubClusterId) String() string {
 
 func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 	clusterConfig := struct {
-		Cluster          *string                    `json:"cluster"`
-		SubCluster       *string                    `json:"subcluster"`
-		DeviceTypes      map[string]json.RawMessage `json:"devicetypes"`
-		HostRegex        *string                    `json:"hostRegex"`
-		PartitionRegex   *string                    `json:"partitionRegex"`
-		PowerBudgetTotal float64                    `json:"powerBudgetTotal"`
+		Name             *string           `json:"name"`
+		PartitionRegex   *string           `json:"partitionRegex"`
+		PowerBudgetTotal float64           `json:"powerBudgetTotal"`
+		Subclusters      []json.RawMessage `json:"subclusters"`
 	}{}
 
 	err := json.Unmarshal(rawClusterConfig, &clusterConfig)
@@ -86,34 +85,12 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 		return fmt.Errorf("unable to parse cluster JSON: %w", err)
 	}
 
-	if clusterConfig.Cluster == nil || clusterConfig.SubCluster == nil || clusterConfig.DeviceTypes == nil || clusterConfig.HostRegex == nil {
-		return fmt.Errorf("cluster config is missing 'cluster', 'subcluster', 'devicetypes', or 'hostRegex': %s", string(rawClusterConfig))
+	if clusterConfig.Name == nil || clusterConfig.Subclusters == nil {
+		return fmt.Errorf("cluster config is missing 'name' or 'subclusters': %s", string(rawClusterConfig))
 	}
 
 	if clusterConfig.PowerBudgetTotal <= 0.0 {
 		return fmt.Errorf("cluster config must contain a non-zero positive powerBudgetTotal")
-	}
-
-	subClusterId := SubClusterId{
-		Cluster:    *clusterConfig.Cluster,
-		SubCluster: *clusterConfig.SubCluster,
-	}
-
-	cclog.Debugf("Adding Cluster '%s'", subClusterId)
-
-	cluster, ok := cm.clusters[*clusterConfig.Cluster]
-	if !ok {
-		cluster = &Cluster{
-			subClusters:      make(map[string]*SubCluster),
-			jobIdToJob:       make(map[int64]*Job),
-			hostToJobs:       make(map[string]map[int64]*Job),
-			powerBudgetTotal: clusterConfig.PowerBudgetTotal,
-		}
-		cm.clusters[*clusterConfig.Cluster] = cluster
-	}
-
-	if _, ok := cluster.subClusters[*clusterConfig.SubCluster]; ok {
-		return fmt.Errorf("Cluster defined twice in config file: '%+v'", subClusterId)
 	}
 
 	if clusterConfig.PartitionRegex == nil {
@@ -121,11 +98,63 @@ func (cm *clusterManager) AddCluster(rawClusterConfig json.RawMessage) error {
 		clusterConfig.PartitionRegex = new("^.*$")
 	}
 
-	cluster.subClusters[*clusterConfig.SubCluster] = &SubCluster{
+	cclog.Debugf("Adding Cluster '%s'", *clusterConfig.Name)
+
+	if _, ok := cm.clusters[*clusterConfig.Name]; ok {
+		return fmt.Errorf("Cluster '%s' defined twice in config.", *clusterConfig.Name)
+	}
+
+	cluster := &Cluster{
+		clusterName:      *clusterConfig.Name,
+		subClusters:      make(map[string]*SubCluster),
+		jobIdToJob:       make(map[int64]*Job),
+		hostToJobs:       make(map[string]map[int64]*Job),
+		powerBudgetTotal: clusterConfig.PowerBudgetTotal,
+		partitionRegex:   regexp.MustCompile(*clusterConfig.PartitionRegex),
+	}
+	cm.clusters[*clusterConfig.Name] = cluster
+
+	for _, subcluster := range clusterConfig.Subclusters {
+		err = cm.AddSubcluster(cluster, subcluster)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (cm *clusterManager) AddSubcluster(cluster *Cluster, rawSubclusterConfig json.RawMessage) error {
+	subclusterConfig := struct {
+		Name        *string                    `json:"name"`
+		DeviceTypes map[string]json.RawMessage `json:"devicetypes"`
+		HostRegex   *string                    `json:"hostRegex"`
+	}{}
+
+	err := json.Unmarshal(rawSubclusterConfig, &subclusterConfig)
+	if err != nil {
+		return fmt.Errorf("unable to parse subcluster JSON: %w", err)
+	}
+
+	if subclusterConfig.Name == nil || subclusterConfig.DeviceTypes == nil || subclusterConfig.HostRegex == nil {
+		return fmt.Errorf("cluster config is missing 'cluster', 'subcluster', 'devicetypes', or 'hostRegex': %s", string(rawSubclusterConfig))
+	}
+
+	subClusterId := SubClusterId{
+		Cluster:    cluster.clusterName,
+		SubCluster: *subclusterConfig.Name,
+	}
+
+	cclog.Debugf("Adding Subcluster '%s'", subClusterId)
+
+	if _, ok := cluster.subClusters[*subclusterConfig.Name]; ok {
+		return fmt.Errorf("Subcluster defined twice in config file: '%+v'", subClusterId)
+	}
+
+	cluster.subClusters[*subclusterConfig.Name] = &SubCluster{
 		subClusterId:                subClusterId,
-		deviceTypeToOptimizerConfig: clusterConfig.DeviceTypes,
-		hostRegex:                   regexp.MustCompile(*clusterConfig.HostRegex),
-		partitionRegex:              regexp.MustCompile(*clusterConfig.PartitionRegex),
+		deviceTypeToOptimizerConfig: subclusterConfig.DeviceTypes,
+		hostRegex:                   regexp.MustCompile(*subclusterConfig.HostRegex),
 	}
 	return nil
 }
@@ -313,8 +342,8 @@ func (cm *clusterManager) StartJob(startJobData schema.Job) {
 		return
 	}
 
-	if !subCluster.partitionRegex.MatchString(startJobData.Partition) {
-		cclog.Debugf("Ignoring job (%s, %s, %d), which isn't on a whitelisted partition (%s ~= %s failed)", startJobData.Cluster, startJobData.SubCluster, startJobData.JobID, startJobData.Partition, subCluster.partitionRegex.String())
+	if !cluster.partitionRegex.MatchString(startJobData.Partition) {
+		cclog.Debugf("Ignoring job (%s, %s, %d), which isn't on a whitelisted partition (%s ~= %s failed)", startJobData.Cluster, startJobData.SubCluster, startJobData.JobID, startJobData.Partition, cluster.partitionRegex.String())
 		return
 	}
 
