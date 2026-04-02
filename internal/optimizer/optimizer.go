@@ -27,8 +27,6 @@ func NewOptimizer(rawConfig json.RawMessage) (Optimizer, error) {
 	}
 
 	switch cfg.Type {
-	case "gss":
-		return NewGssOptimizer(rawConfig)
 	case "gssng":
 		return NewGssNgOptimizer(rawConfig)
 	case "test":
