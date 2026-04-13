@@ -192,6 +192,11 @@ func (cm *clusterManager) StopJob(stopJobData schema.Job) {
 		return
 	}
 
+	if !cluster.partitionRegex.MatchString(stopJobData.Partition) {
+		cclog.Debugf("Ignoring job (%s, %s, %d), which isn't on a whitelisted partition (%s ~= %s failed)", stopJobData.Cluster, stopJobData.SubCluster, stopJobData.JobID, stopJobData.Partition, cluster.partitionRegex.String())
+		return
+	}
+
 	if len(stopJobData.SubCluster) > 0 && stopJobData.SubCluster != job.data.SubCluster {
 		cclog.Errorf("Trying to stop jobId '%d' for subCluster '%s', which is different to subcluster started with '%s'", stopJobData.JobID, stopJobData.SubCluster, job.data.SubCluster)
 		return
