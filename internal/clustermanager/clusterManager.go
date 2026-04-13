@@ -186,14 +186,14 @@ func (cm *clusterManager) StopJob(stopJobData schema.Job) {
 		return
 	}
 
-	job, ok := cluster.jobIdToJob[stopJobData.JobID]
-	if !ok {
-		cclog.Warnf("cannot stop job '%d', which we don't know", stopJobData.JobID)
+	if !cluster.partitionRegex.MatchString(stopJobData.Partition) {
+		cclog.Debugf("Ignoring job (%s, %s, %d), which isn't on a whitelisted partition (%s ~= %s failed)", stopJobData.Cluster, stopJobData.SubCluster, stopJobData.JobID, stopJobData.Partition, cluster.partitionRegex.String())
 		return
 	}
 
-	if !cluster.partitionRegex.MatchString(stopJobData.Partition) {
-		cclog.Debugf("Ignoring job (%s, %s, %d), which isn't on a whitelisted partition (%s ~= %s failed)", stopJobData.Cluster, stopJobData.SubCluster, stopJobData.JobID, stopJobData.Partition, cluster.partitionRegex.String())
+	job, ok := cluster.jobIdToJob[stopJobData.JobID]
+	if !ok {
+		cclog.Warnf("cannot stop job '%d', which we don't know", stopJobData.JobID)
 		return
 	}
 
