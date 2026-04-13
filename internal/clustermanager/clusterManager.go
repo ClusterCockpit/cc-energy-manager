@@ -172,7 +172,7 @@ func (cm *clusterManager) AddOutput(output chan lp.CCMessage) {
 	cm.output = output
 }
 
-func (cm *clusterManager) StopJob(stopJobData schema.Job) {
+func (cm *clusterManager) StopJob(stopJobData schema.Job, partition string) {
 	// WARNING: stopJobData is reconstructed from the StopJob event and is incomplete.
 	// Be careful which values you use and get the actual job data from the JobManager
 	if len(stopJobData.Cluster) == 0 || stopJobData.JobID == 0 {
@@ -186,7 +186,7 @@ func (cm *clusterManager) StopJob(stopJobData schema.Job) {
 		return
 	}
 
-	if !cluster.partitionRegex.MatchString(stopJobData.Partition) {
+	if !cluster.partitionRegex.MatchString(partition) {
 		cclog.Debugf("Ignoring job (%s, %s, %d), which isn't on a whitelisted partition (%s ~= %s failed)", stopJobData.Cluster, stopJobData.SubCluster, stopJobData.JobID, stopJobData.Partition, cluster.partitionRegex.String())
 		return
 	}
@@ -255,7 +255,7 @@ func (cm *clusterManager) cleanupCollidingJobs(job *Job) {
 
 		for _, job := range jobsToStop {
 			cclog.ComponentWarnf("ClusterManager", "- [%s] %d", job.Cluster, job.JobID)
-			cm.StopJob(schema.Job{JobID: job.JobID, Cluster: job.Cluster})
+			cm.StopJob(schema.Job{JobID: job.JobID, Cluster: job.Cluster}, job.Partition)
 		}
 	}
 }
@@ -462,12 +462,13 @@ func (cm *clusterManager) processEvent(msg lp.CCMessage) {
 		cm.StartJob(job)
 	case "stop_job":
 		eventVal, _ := msg.GetEventValue()
+		partition, _ := msg.GetMeta("partition")
 		job, err := unmarshalJob(eventVal)
 		if err != nil {
 			cclog.ComponentError("ClusterManager", err.Error())
 			break
 		}
-		cm.StopJob(job)
+		cm.StopJob(job, partition)
 	default:
 		cclog.Warnf("Unimplemented job event: %+v", msg)
 	}
