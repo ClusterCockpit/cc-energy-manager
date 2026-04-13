@@ -136,8 +136,13 @@ func (cm *clusterManager) AddSubcluster(cluster *Cluster, rawSubclusterConfig js
 		return fmt.Errorf("unable to parse subcluster JSON: %w", err)
 	}
 
-	if subclusterConfig.Name == nil || subclusterConfig.DeviceTypes == nil || subclusterConfig.HostRegex == nil {
-		return fmt.Errorf("cluster config is missing 'cluster', 'subcluster', 'devicetypes', or 'hostRegex': %s", string(rawSubclusterConfig))
+	if subclusterConfig.Name == nil || subclusterConfig.DeviceTypes == nil {
+		return fmt.Errorf("cluster config is missing 'cluster', 'subcluster', 'devicetypes': %s", string(rawSubclusterConfig))
+	}
+
+	if subclusterConfig.HostRegex == nil {
+		// If no host regex is set, allow management of all hosts
+		subclusterConfig.HostRegex = new("^.*$")
 	}
 
 	subClusterId := SubClusterId{
