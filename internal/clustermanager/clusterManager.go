@@ -462,7 +462,7 @@ func (cm *clusterManager) processEvent(msg lp.CCMessage) {
 		cm.StartJob(job)
 	case "stop_job":
 		eventVal, _ := msg.GetEventValue()
-		partition, _ := msg.GetMeta("partition")
+		partition, _ := msg.GetTag("partition")
 		job, err := unmarshalJob(eventVal)
 		if err != nil {
 			cclog.ComponentError("ClusterManager", err.Error())
