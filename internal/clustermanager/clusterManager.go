@@ -563,8 +563,8 @@ func (cm *clusterManager) JobPopulateSubcluster(job *schema.Job) error {
 		if !subClusterIdFound {
 			subClusterIdFound = true
 			subClusterId = subClusterIdCandidate
-		} else {
-			return fmt.Errorf("job crosses multiple clusters: %+v", job)
+		} else if subClusterId != subClusterIdCandidate {
+			return fmt.Errorf("job crosses multiple subclusters: %+v", job)
 		}
 	}
 
