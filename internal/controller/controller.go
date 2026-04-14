@@ -110,7 +110,7 @@ func getControlClient(c *ccController, cluster string) (cccontrol.CCControlClien
 		newNatsConfig.RequestSubject = strings.ReplaceAll(c.nats.RequestSubject, "%c", cluster)
 		controlClient, err := cccontrol.NewCCControlClient(newNatsConfig)
 		if err != nil {
-			return nil, fmt.Errorf("NewCCControlClient failed: %w", err)
+			return nil, fmt.Errorf("NewCCControlClient (sub=%s) failed: %w", c.nats.RequestSubject, err)
 		}
 
 		c.controlClients[cluster] = controlClient
