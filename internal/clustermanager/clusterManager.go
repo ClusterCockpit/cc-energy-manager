@@ -187,7 +187,7 @@ func (cm *clusterManager) StopJob(stopJobData schema.Job, partition string) {
 	}
 
 	if !cluster.partitionRegex.MatchString(partition) {
-		cclog.Debugf("Ignoring job (%s, %s, %d), which isn't on a whitelisted partition (%s ~= %s failed)", stopJobData.Cluster, stopJobData.SubCluster, stopJobData.JobID, stopJobData.Partition, cluster.partitionRegex.String())
+		cclog.Debugf("Ignoring job (%s, %s, %d), which isn't on a whitelisted partition (%s =~ %s failed)", stopJobData.Cluster, stopJobData.SubCluster, stopJobData.JobID, stopJobData.Partition, cluster.partitionRegex.String())
 		return
 	}
 
@@ -353,7 +353,7 @@ func (cm *clusterManager) StartJob(startJobData schema.Job) {
 	}
 
 	if !cluster.partitionRegex.MatchString(startJobData.Partition) {
-		cclog.Debugf("Ignoring job (%s, %s, %d), which isn't on a whitelisted partition (%s ~= %s failed)", startJobData.Cluster, startJobData.SubCluster, startJobData.JobID, startJobData.Partition, cluster.partitionRegex.String())
+		cclog.Debugf("Ignoring job (%s, %s, %d), which isn't on a whitelisted partition (%s =~ %s failed)", startJobData.Cluster, startJobData.SubCluster, startJobData.JobID, startJobData.Partition, cluster.partitionRegex.String())
 		return
 	}
 
