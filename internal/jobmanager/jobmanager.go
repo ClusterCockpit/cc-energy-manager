@@ -73,7 +73,7 @@ func NewJobManager(jobManagerStopped chan<- *JobManager, ctrl controller.Control
 	}
 
 	j := JobManager{
-		done:              make(chan struct{}),
+		done:              make(chan struct{}, 2), // allow two simultaneous 'done' signals (external, internal)
 		started:           false,
 		targetToOptimizer: make(map[aggregator.Target]optimizer.Optimizer),
 		targetToDevices:   make(map[aggregator.Target][]aggregator.Target),
