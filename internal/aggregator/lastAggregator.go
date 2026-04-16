@@ -17,7 +17,7 @@ type LastAggregatorConfig struct {
 	BasePower         float64 `json:"basePower"`
 	PowerMetric       string  `json:"powerMetric"`
 	PerformanceMetric string  `json:"performanceMetric"`
-	UseMax            bool    `json:"useMax"`
+	ReductionMode     string  `json:"reductionMode"`
 }
 
 type LastAggregator struct {
@@ -28,7 +28,7 @@ type LastAggregator struct {
 	performanceMetric  string
 	deviceType         string
 	basePower          float64
-	useMax             bool
+	edpReductionMode   EdpReductionMode
 }
 
 func NewLastAggregator(rawConfig json.RawMessage) (*LastAggregator, error) {
@@ -52,7 +52,12 @@ func NewLastAggregator(rawConfig json.RawMessage) (*LastAggregator, error) {
 	ag.performanceSamples = make(map[string]map[string]float64)
 	ag.deviceType = config.DeviceType
 	ag.basePower = config.BasePower
-	ag.useMax = config.UseMax
+
+	var err error
+	ag.edpReductionMode, err = EdpReductionModeParse(config.ReductionMode)
+	if err != nil {
+		return nil, err
+	}
 
 	return ag, nil
 }
@@ -109,5 +114,5 @@ func (a *LastAggregator) GetEdpPerTarget() map[Target]float64 {
 		}
 	}
 
-	return DeviceEdpToTargetEdp(edp, a.useMax)
+	return DeviceEdpToTargetEdp(edp, a.edpReductionMode)
 }

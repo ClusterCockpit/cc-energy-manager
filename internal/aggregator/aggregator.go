@@ -13,6 +13,19 @@ import (
 	lp "github.com/ClusterCockpit/cc-lib/v2/ccMessage"
 )
 
+const (
+	EdpReduceArithMean EdpReductionMode = iota
+	EdpReduceGeomMean
+	EdpReduceHarmMean
+	EdpReduceMin
+	EdpReduceMax
+	EdpReduceInvalid
+
+	HarmMeanMin = 0.000000001
+)
+
+type EdpReductionMode int
+
 type Aggregator interface {
 	// Add a metric to this aggregator
 	AggregateMetric(m lp.CCMessage)
@@ -27,6 +40,10 @@ type Target struct {
 	HostName string
 	DeviceId string
 }
+
+var (
+	MinInit = math.Inf(1)
+)
 
 func New(rawConfig json.RawMessage) (Aggregator, error) {
 	var cfg struct {
@@ -95,51 +112,123 @@ func (t Target) String() string {
 	return t.HostName
 }
 
+func EdpReductionModeParse(configString string) (EdpReductionMode, error) {
+	if configString == "" {
+		return EdpReduceArithMean, nil
+	}
+
+	availModes := map[string]EdpReductionMode{
+		"arithmeticMean": EdpReduceArithMean,
+		"geometricMean":  EdpReduceGeomMean,
+		"harmonicMean":   EdpReduceHarmMean,
+		"min":            EdpReduceMin,
+		"max":            EdpReduceMax,
+	}
+
+	mode, ok := availModes[configString]
+	if !ok {
+		return EdpReduceInvalid, fmt.Errorf("Invalid reduction mode '%s'. Available modes: %+v", configString, availModes)
+	}
+
+	return mode, nil
+}
+
+func edpAccumulatorInit(edpReductionMode EdpReductionMode) float64 {
+	if edpReductionMode == EdpReduceGeomMean {
+		return 1.0
+	}
+	if edpReductionMode == EdpReduceMin {
+		return MinInit
+	}
+	return 0.0
+}
+
+func edpAccumulate(edpAcc, edp float64, edpReductionMode EdpReductionMode) float64 {
+	switch edpReductionMode {
+	case EdpReduceArithMean:
+		return edpAcc + edp
+	case EdpReduceGeomMean:
+		return edpAcc * edp
+	case EdpReduceHarmMean:
+		if edp < HarmMeanMin {
+			cclog.Errorf("Cannot accumulate with EDP of %f (non positive)", edp)
+			return edpAcc
+		}
+		return edpAcc + (1.0 / edp)
+	case EdpReduceMin:
+		return min(edpAcc, edp)
+	case EdpReduceMax:
+		return max(edpAcc, edp)
+	default:
+		cclog.Panicf("BUG: Invalid edp reduction mode: %d", int(edpReductionMode))
+	}
+
+	return 0.0
+}
+
+func edpReduce(edpAcc float64, degree int, edpReductionMode EdpReductionMode) float64 {
+	if degree <= 0 {
+		cclog.Panicf("Cannot reduce EDP (%f) with mode %d by non-positive degree: %d", edpAcc, int(edpReductionMode), degree)
+	}
+
+	switch edpReductionMode {
+	case EdpReduceArithMean:
+		return edpAcc / float64(degree)
+	case EdpReduceGeomMean:
+		return math.Pow(edpAcc, 1.0/float64(degree))
+	case EdpReduceHarmMean:
+		if edpAcc < HarmMeanMin {
+			cclog.Errorf("Cannot reduce with EDP of %f (non positive)", edpAcc)
+			return 0.0
+		}
+		return 1.0 / (edpAcc / float64(degree))
+	case EdpReduceMin:
+		if edpAcc == MinInit {
+			return 0.0
+		}
+		return edpAcc
+	case EdpReduceMax:
+		return edpAcc
+	default:
+		cclog.Panicf("BUG: Invalid edp reduction mode: %d", int(edpReductionMode))
+	}
+
+	return 0.0
+}
+
 // This function receives a map `map[hostname]map[deviceId]edp` and
 // returns a `map[targetName]edp`.
 // All target scopes are calculated, regardless of the actual scope used.
+// The receiver of the return value just picks the required target type.
 // The upper scopes are calculated by averaging the values. Perhaps we should make
 // this configurable.
-func DeviceEdpToTargetEdp(edpMap map[string]map[string]float64, useMax bool) map[Target]float64 {
-	jobEdp := 0.0
+func DeviceEdpToTargetEdp(edpMap map[string]map[string]float64, edpReductionMode EdpReductionMode) map[Target]float64 {
+	jobEdp := edpAccumulatorInit(edpReductionMode)
 	jobNumDevices := 0
 
 	targetEdp := make(map[Target]float64)
 
 	for hostname, deviceIdToEdp := range edpMap {
-		hostEdp := 0.0
+		hostEdp := edpAccumulatorInit(edpReductionMode)
 		hostNumDevices := 0
 
 		for deviceId, edp := range deviceIdToEdp {
-			if useMax {
-				hostEdp = max(hostEdp, edp)
-			} else {
-				hostEdp += edp
-			}
+			hostEdp = edpAccumulate(hostEdp, edp, edpReductionMode)
 			hostNumDevices++
-
 			targetEdp[DeviceScopeTarget(hostname, deviceId)] = edp
 		}
 
-		if useMax {
-			jobEdp = max(jobEdp, hostEdp)
-		} else {
-			jobEdp += hostEdp
-		}
+		jobEdp = edpAccumulate(jobEdp, hostEdp, edpReductionMode)
 		jobNumDevices += hostNumDevices
 
 		if hostNumDevices > 0 {
-			if !useMax {
-				hostEdp /= float64(hostNumDevices)
-			}
+			hostEdp = edpReduce(hostEdp, hostNumDevices, edpReductionMode)
 			targetEdp[NodeScopeTarget(hostname)] = hostEdp
 		}
 	}
 
 	if jobNumDevices > 0 {
-		if !useMax {
-			jobEdp /= float64(jobNumDevices)
-		}
+		jobEdp = edpReduce(jobEdp, jobNumDevices, edpReductionMode)
 		targetEdp[JobScopeTarget()] = jobEdp
 	}
 
