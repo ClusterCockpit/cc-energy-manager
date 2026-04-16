@@ -29,7 +29,6 @@ var (
 	phi     = (sqrt5 + 1) / 2 //# phi
 	invphi  = (sqrt5 - 1) / 2 //# 1/phi
 	invphi2 = (3 - sqrt5) / 2 //# 1/phi^2
-	nan     = math.NaN()
 )
 
 type sample struct {
