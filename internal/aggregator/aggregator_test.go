@@ -65,3 +65,35 @@ func TestCalculationHarmMean(t *testing.T) {
 		t.Errorf("Geom Mean of [1, 4, 4] is not ~2.0: %v", v)
 	}
 }
+
+func TestCalculationMin(t *testing.T) {
+	edpMap := map[string]map[string]float64{
+		"f0601" : map[string]float64{
+			"0": 1.0,
+			"1": 2.0,
+			"2": 3.0,
+		},
+	}
+
+	m := DeviceEdpToTargetEdp(edpMap, EdpReduceMin)
+
+	if v, _ := m[JobScopeTarget()]; v != 1.0 {
+		t.Errorf("Geom Mean of [1, 2, 3] is not 1.0: %v", v)
+	}
+}
+
+func TestCalculationMax(t *testing.T) {
+	edpMap := map[string]map[string]float64{
+		"f0601" : map[string]float64{
+			"0": 1.0,
+			"1": 2.0,
+			"2": 3.0,
+		},
+	}
+
+	m := DeviceEdpToTargetEdp(edpMap, EdpReduceMax)
+
+	if v, _ := m[JobScopeTarget()]; v != 3.0 {
+		t.Errorf("Geom Mean of [1, 2, 3] is not 3.0: %v", v)
+	}
+}
