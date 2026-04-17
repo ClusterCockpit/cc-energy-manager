@@ -18,8 +18,8 @@ func TestReductionParse(t *testing.T) {
 	}
 }
 
-func TestCalculation(t *testing.T) {
-	edpMap1 := map[string]map[string]float64{
+func TestCalculationArithMean(t *testing.T) {
+	edpMap := map[string]map[string]float64{
 		"f0601" : map[string]float64{
 			"0": 1.0,
 			"1": 2.0,
@@ -27,13 +27,15 @@ func TestCalculation(t *testing.T) {
 		},
 	}
 
-	m1 := DeviceEdpToTargetEdp(edpMap1, EdpReduceArithMean)
+	m := DeviceEdpToTargetEdp(edpMap, EdpReduceArithMean)
 
-	if v, _ := m1[JobScopeTarget()]; v < 1.999 || v > 2.001 {
+	if v, _ := m[JobScopeTarget()]; v < 1.999 || v > 2.001 {
 		t.Errorf("Mean of [0, 1, 2] is not ~2.0: %v", v)
 	}
+}
 
-	edpMap2 := map[string]map[string]float64{
+func TestCalculationGeomMean(t *testing.T) {
+	edpMap := map[string]map[string]float64{
 		"f0601" : map[string]float64{
 			"0": 1.0,
 			"1": 10.0,
@@ -41,9 +43,25 @@ func TestCalculation(t *testing.T) {
 		},
 	}
 
-	m2 := DeviceEdpToTargetEdp(edpMap2, EdpReduceGeomMean)
+	m := DeviceEdpToTargetEdp(edpMap, EdpReduceGeomMean)
 
-	if v, _ := m2[JobScopeTarget()]; v < 9.999 || v > 10.001 {
+	if v, _ := m[JobScopeTarget()]; v < 9.999 || v > 10.001 {
 		t.Errorf("Geom Mean of [1, 10, 100] is not ~10.0: %v", v)
+	}
+}
+
+func TestCalculationHarmMean(t *testing.T) {
+	edpMap := map[string]map[string]float64{
+		"f0601" : map[string]float64{
+			"0": 1.0,
+			"1": 4.0,
+			"2": 4.0,
+		},
+	}
+
+	m := DeviceEdpToTargetEdp(edpMap, EdpReduceHarmMean)
+
+	if v, _ := m[NodeScopeTarget("f0601")]; v < 1.999 || v > 2.001 {
+		t.Errorf("Geom Mean of [1, 4, 4] is not ~2.0: %v", v)
 	}
 }

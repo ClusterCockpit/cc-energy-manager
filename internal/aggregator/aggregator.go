@@ -181,7 +181,7 @@ func edpReduce(edpAcc float64, degree int, edpReductionMode EdpReductionMode) fl
 			cclog.Errorf("Cannot reduce with EDP of %f (non positive)", edpAcc)
 			return 0.0
 		}
-		return 1.0 / (edpAcc / float64(degree))
+		return float64(degree) / edpAcc
 	case EdpReduceMin:
 		if edpAcc == MinInit {
 			return 0.0
