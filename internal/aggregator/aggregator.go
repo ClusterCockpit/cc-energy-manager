@@ -67,7 +67,7 @@ type TargetMetric struct {
 type TargetMetricValue struct {
 	TargetMetric
 	Value float64
-	Tm time.Time
+	Tm    time.Time
 }
 
 type MetricRange struct {

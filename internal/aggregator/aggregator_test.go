@@ -20,7 +20,7 @@ func TestReductionParse(t *testing.T) {
 
 func TestCalculationArithMean(t *testing.T) {
 	edpMap := map[string]map[string]float64{
-		"f0601" : map[string]float64{
+		"f0601": map[string]float64{
 			"0": 1.0,
 			"1": 2.0,
 			"2": 3.0,
@@ -36,7 +36,7 @@ func TestCalculationArithMean(t *testing.T) {
 
 func TestCalculationGeomMean(t *testing.T) {
 	edpMap := map[string]map[string]float64{
-		"f0601" : map[string]float64{
+		"f0601": map[string]float64{
 			"0": 1.0,
 			"1": 10.0,
 			"2": 100.0,
@@ -52,7 +52,7 @@ func TestCalculationGeomMean(t *testing.T) {
 
 func TestCalculationHarmMean(t *testing.T) {
 	edpMap := map[string]map[string]float64{
-		"f0601" : map[string]float64{
+		"f0601": map[string]float64{
 			"0": 1.0,
 			"1": 4.0,
 			"2": 4.0,
@@ -68,7 +68,7 @@ func TestCalculationHarmMean(t *testing.T) {
 
 func TestCalculationMin(t *testing.T) {
 	edpMap := map[string]map[string]float64{
-		"f0601" : map[string]float64{
+		"f0601": map[string]float64{
 			"0": 1.0,
 			"1": 2.0,
 			"2": 3.0,
@@ -84,7 +84,7 @@ func TestCalculationMin(t *testing.T) {
 
 func TestCalculationMax(t *testing.T) {
 	edpMap := map[string]map[string]float64{
-		"f0601" : map[string]float64{
+		"f0601": map[string]float64{
 			"0": 1.0,
 			"1": 2.0,
 			"2": 3.0,

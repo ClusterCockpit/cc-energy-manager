@@ -15,12 +15,12 @@ import (
 )
 
 type MedianAggregatorConfig struct {
-	DeviceType         string   `json:"deviceType"`
-	BasePower          float64  `json:"basePower"`
-	WindowSize         int       `json:"windowSize"`
+	DeviceType         string                 `json:"deviceType"`
+	BasePower          float64                `json:"basePower"`
+	WindowSize         int                    `json:"windowSize"`
 	PowerMetrics       map[string]MetricRange `json:"powerMetric"`
 	PerformanceMetrics map[string]MetricRange `json:"performanceMetric"`
-	ReductionMode      string   `json:"reductionMode"`
+	ReductionMode      string                 `json:"reductionMode"`
 }
 
 type MetricStaged struct {
@@ -30,19 +30,19 @@ type MetricStaged struct {
 
 type MedianAggregator struct {
 	// map[hostname][index]map[deviceId]MetricStaged
-	metricsStaged      map[HostNameString][]map[DeviceIdString]MetricStaged
-	metricsReady       bool
-	devicesToManage    map[HostNameString]map[DeviceIdString]struct{}
+	metricsStaged   map[HostNameString][]map[DeviceIdString]MetricStaged
+	metricsReady    bool
+	devicesToManage map[HostNameString]map[DeviceIdString]struct{}
 
 	powerMetrics       map[MetricNameString]MetricRange
 	performanceMetrics map[MetricNameString]MetricRange
 
-	metricsIncoming   map[HostNameString]map[DeviceIdString]map[MetricNameString]TargetMetricValue
+	metricsIncoming map[HostNameString]map[DeviceIdString]map[MetricNameString]TargetMetricValue
 
-	windowSize        int
-	deviceType        DeviceTypeString
-	basePower         float64
-	edpReductionMode  EdpReductionMode
+	windowSize       int
+	deviceType       DeviceTypeString
+	basePower        float64
+	edpReductionMode EdpReductionMode
 }
 
 func NewMedianAggregator(rawConfig json.RawMessage, devices []Target, deviceType string) (*MedianAggregator, error) {
@@ -129,7 +129,7 @@ func (a *MedianAggregator) MetricAdd(ccMessage lp.CCMessage) {
 	// do not use metrics, which don't belong together.
 	// As soon as 'batch' is complete, we put the calculated power and performance
 	// into our history buffer 'metricsStaged'.
-	// 
+	//
 	// It is important that ccmc-{begin,end} marker metrics are being send
 	// Otherwise ccmc will not function, since it doesn't reliably know, which
 	// metrics belong together
@@ -163,7 +163,7 @@ func (a *MedianAggregator) metricsStage(hostname HostNameString) {
 
 	for deviceId, _ := range a.devicesToManage[hostname] {
 		metricReceived := func(metricName MetricNameString) (float64, bool) {
-			deviceIds, ok := a.metricsIncoming[hostname];
+			deviceIds, ok := a.metricsIncoming[hostname]
 			if !ok {
 				return 0.0, false
 			}
@@ -197,7 +197,7 @@ func (a *MedianAggregator) metricsStage(hostname HostNameString) {
 		}
 
 		samplesToStage[deviceId] = MetricStaged{
-			power: powerSumForDevice,
+			power:       powerSumForDevice,
 			performance: performanceProductForDevice,
 		}
 	}
@@ -225,9 +225,9 @@ func (a *MedianAggregator) metricsReadyUpdate() {
 		maxSampleCount = max(maxSampleCount, len(metricsStagedForHost))
 	}
 
-	if maxSampleCount - minSampleCount > 2 {
-		cclog.Warnf("Detected desync in metrics received. Received %d batches of metrics from one host, " +
-			"while only receiving %d from another. " +
+	if maxSampleCount-minSampleCount > 2 {
+		cclog.Warnf("Detected desync in metrics received. Received %d batches of metrics from one host, "+
+			"while only receiving %d from another. "+
 			"Is cc-metric-collector configured correctly on all nodes?", maxSampleCount, minSampleCount)
 	}
 
@@ -243,8 +243,8 @@ func (a *MedianAggregator) GetEdpPerTarget() map[Target]float64 {
 	for hostname, samplesForHost := range a.metricsStaged {
 		edp[string(hostname)] = make(map[string]float64)
 
-		samples := make(map[DeviceIdString]struct{
-			power []float64
+		samples := make(map[DeviceIdString]struct {
+			power       []float64
 			performance []float64
 		}, len(samplesForHost))
 
