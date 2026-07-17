@@ -82,7 +82,7 @@ func TestUpperBarrier(t *testing.T) {
 	ok := false
 
 	for !ok {
-		out, ok = o.Start(in)
+		out = o.Update(in)
 		in = f(out)
 	}
 	i := 0
@@ -123,7 +123,7 @@ func TestNoise(t *testing.T) {
 	ok := false
 
 	for !ok {
-		out, ok = o.Start(in)
+		out = o.Update(in)
 		in = 100
 	}
 	i := 0
@@ -184,7 +184,7 @@ func TestUpperBarrierAndMove(t *testing.T) {
 	ok := false
 
 	for !ok {
-		out, ok = o.Start(in)
+		out = o.Update(in)
 		in = f(out)
 	}
 	i := 0
@@ -227,8 +227,8 @@ func TestFirestarterBergamo(t *testing.T) {
 
 	samples := LoadSamples(t, "testdata/FIRESTARTER.bergamo1", 0)
 
-	newLimit, _ := o.Start(42.0)
-	newLimit, _ = o.Start(newLimit)
+	newLimit := o.Update(42.0)
+	newLimit = o.Update(newLimit)
 
 	for i := 0; i < 30; i++ {
 		newLimit = o.Update(ProbeSample(t, samples, newLimit))
