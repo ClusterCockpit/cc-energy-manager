@@ -55,12 +55,13 @@ type gssngOptimizer struct {
 	fudgeFactor    float64
 }
 
-func (o *gssngOptimizer) Start(y float64) (float64, bool) {
-	o.probeMode = ProbeLowerOuter
-	return o.lowerOuter.x, true
-}
-
 func (o *gssngOptimizer) Update(y float64) float64 {
+	if o.probeMode == ProbeNone {
+		// This should only be on first call, or if the borders are being reset
+		o.probeMode = ProbeLowerOuter
+		return o.lowerOuter.x
+	}
+
 	y = max(0.0, y)
 
 	o.DumpState("before")

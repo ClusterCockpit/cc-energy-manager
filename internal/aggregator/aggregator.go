@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"time"
 
 	cclog "github.com/ClusterCockpit/cc-lib/v2/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/v2/ccMessage"
@@ -28,24 +29,57 @@ type EdpReductionMode int
 
 type Aggregator interface {
 	// Add a metric to this aggregator
-	AggregateMetric(m lp.CCMessage)
+	MetricAdd(m lp.CCMessage)
+	// Check if all required metrics have been added
+	MetricsReady() bool
 	// Get the current EDP vor all known targets.
 	// The returned map maps all available target names to EDP.
 	// If metrics for certain hosts or devices have not yet been received,
 	// they will not be present in this map. Your code should handle this accordingly
 	GetEdpPerTarget() map[Target]float64
+	// Reset all metric buffers. This should be called after changing anything,
+	// which influences measurements on a host (like changing freq. or power limit)
+	MetricsReset()
 }
 
+type HostNameString string
+type DeviceIdString string
+type DeviceTypeString string
+type MetricNameString string
+
 type Target struct {
-	HostName string
-	DeviceId string
+	HostName HostNameString
+	DeviceId DeviceIdString
+}
+
+// TODO do we still need this?
+type TargetTyped struct {
+	Target
+	DeviceType DeviceTypeString
+}
+
+// TODO do we still need this?
+type TargetMetric struct {
+	TargetTyped
+	MetricName MetricNameString
+}
+
+type TargetMetricValue struct {
+	TargetMetric
+	Value float64
+	Tm time.Time
+}
+
+type MetricRange struct {
+	MinValue float64 `json:"minValue"`
+	MaxValue float64 `json:"maxValue"`
 }
 
 var (
 	MinInit = math.Inf(1)
 )
 
-func New(rawConfig json.RawMessage) (Aggregator, error) {
+func New(rawConfig json.RawMessage, devices []Target, deviceType string) (Aggregator, error) {
 	var cfg struct {
 		Type string `json:"type"`
 	}
@@ -55,12 +89,10 @@ func New(rawConfig json.RawMessage) (Aggregator, error) {
 	}
 
 	switch cfg.Type {
-	case "last":
-		return NewLastAggregator(rawConfig)
 	case "median":
-		return NewMedianAggregator(rawConfig)
+		return NewMedianAggregator(rawConfig, devices, deviceType)
 	default:
-		return nil, fmt.Errorf("Unknown aggregator %s", cfg.Type)
+		return nil, fmt.Errorf("Unknown aggregator type: %s", cfg.Type)
 	}
 }
 
@@ -95,11 +127,11 @@ func JobScopeTarget() Target {
 }
 
 func NodeScopeTarget(hostname string) Target {
-	return Target{HostName: hostname}
+	return Target{HostName: HostNameString(hostname)}
 }
 
 func DeviceScopeTarget(hostname string, deviceId string) Target {
-	return Target{HostName: hostname, DeviceId: deviceId}
+	return Target{HostName: HostNameString(hostname), DeviceId: DeviceIdString(deviceId)}
 }
 
 func (t Target) String() string {
@@ -109,7 +141,7 @@ func (t Target) String() string {
 	if t.DeviceId != "" {
 		return fmt.Sprintf("%s/%s", t.HostName, t.DeviceId)
 	}
-	return t.HostName
+	return string(t.HostName)
 }
 
 func EdpReductionModeParse(configString string) (EdpReductionMode, error) {
@@ -235,7 +267,7 @@ func DeviceEdpToTargetEdp(edpMap map[string]map[string]float64, edpReductionMode
 	return targetEdp
 }
 
-func checkAndGetMetricFields(m lp.CCMessage, wantedDeviceType string) (hostname string, deviceId string, value float64, ok bool) {
+func metricCheckAndGet(m lp.CCMessage, wantedDeviceType DeviceTypeString) (retval TargetMetricValue, ok bool) {
 	var err error
 
 	// Mind the named return values and the naked return statements!
@@ -244,14 +276,15 @@ func checkAndGetMetricFields(m lp.CCMessage, wantedDeviceType string) (hostname 
 		return
 	}
 
-	hostname, ok = m.GetTag("hostname")
+	hostName, ok := m.GetTag("hostname")
 	if !ok {
 		cclog.Errorf("Unable to aggregate metric without hostname: %+v", m)
 		return
 	}
+	retval.HostName = HostNameString(hostName)
 
 	valueAny, _ := m.GetMetricValue()
-	value, err = valueToFloat64(valueAny)
+	retval.Value, err = valueToFloat64(valueAny)
 	if err != nil {
 		cclog.Errorf("Unable to parse float (%s) from message: %+v", err, m)
 		ok = false
@@ -263,19 +296,36 @@ func checkAndGetMetricFields(m lp.CCMessage, wantedDeviceType string) (hostname 
 		cclog.Errorf("Unable to aggregate metric: missing field type: %+v", m)
 		return
 	}
+	retval.DeviceType = DeviceTypeString(deviceType)
 
-	if deviceType != wantedDeviceType {
+	if retval.DeviceType != wantedDeviceType {
 		// this log message can probably be removed, since this case is not unusual
 		// cclog.Debugf("Ignoring metric of non-matching type '%s', wanted '%s'", deviceType, a.deviceType)
 		ok = false
 		return
 	}
 
-	deviceId, ok = m.GetTag("type-id")
+	deviceId, ok := m.GetTag("type-id")
 	if !ok {
 		cclog.Errorf("Unable to aggregate metric: missing field type-id: %+v", m)
 		return
 	}
+	retval.DeviceId = DeviceIdString(deviceId)
+
+	retval.MetricName = MetricNameString(m.Name())
+	retval.Tm = m.Time()
 
 	return
+}
+
+func (r *MetricRange) Apply(value float64) float64 {
+	return min(max(value, r.MinValue), r.MaxValue)
+}
+
+func (r *MetricRange) ConfigInit() MetricRange {
+	retval := *r
+	if retval.MaxValue == 0.0 {
+		retval.MaxValue = math.Inf(1)
+	}
+	return retval
 }

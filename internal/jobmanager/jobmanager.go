@@ -25,28 +25,27 @@ type jobManagerConfig struct {
 	AggCfg              json.RawMessage `json:"aggregator"`
 	ControlName         string          `json:"controlName"`
 	ControlDefaultValue *float64        `json:"controlDefaultValue"`
-	IntervalConverged   string          `json:"intervalConverged"`
-	IntervalSearch      string          `json:"intervalSearch"`
 	PowerBudgetWeight   float64         `json:"powerBudgetWeight"`
 	OptimizerCfg        json.RawMessage `json:"optimizer"`
 }
+
+// TODO, why are we using Target, and not TargetTyped, here?
 
 type JobManager struct {
 	wg                sync.WaitGroup
 	done              chan struct{}
 	Input             chan lp.CCMessage
-	intervalSearch    time.Duration
-	intervalConverged time.Duration
 	aggregator        aggregator.Aggregator
 	targetToOptimizer map[aggregator.Target]optimizer.Optimizer
 	targetToDevices   map[aggregator.Target][]aggregator.Target
-	optimizeTicker    *time.Ticker
+	watchdogTicker    *time.Ticker
+	watchdogInterval  time.Duration
+	watchdogAttempt   int
 	started           bool
 	stopped           bool
 	cfg               jobManagerConfig
 	Job               schema.Job
 	DeviceType        string
-	warmUpIterCount   int
 	warmUpDone        bool
 	startTime         time.Time
 	jobManagerStopped chan<- *JobManager
@@ -63,11 +62,6 @@ func NewJobManager(jobManagerStopped chan<- *JobManager, ctrl controller.Control
 		return nil, err
 	}
 
-	agg, err := aggregator.New(cfg.AggCfg)
-	if err != nil {
-		return nil, err
-	}
-
 	if cfg.PowerBudgetWeight <= 0.0 {
 		cfg.PowerBudgetWeight = 1.0
 	}
@@ -78,28 +72,11 @@ func NewJobManager(jobManagerStopped chan<- *JobManager, ctrl controller.Control
 		targetToOptimizer: make(map[aggregator.Target]optimizer.Optimizer),
 		targetToDevices:   make(map[aggregator.Target][]aggregator.Target),
 		cfg:               cfg,
-		aggregator:        agg,
 		Job:               job,
 		DeviceType:        deviceType,
 		jobManagerStopped: jobManagerStopped,
 		ctrl:              ctrl,
 	}
-
-	intervalSearch, err := time.ParseDuration(cfg.IntervalSearch)
-	if err != nil {
-		err := fmt.Errorf("failed to parse search interval %s: %v", cfg.IntervalSearch, err.Error())
-		cclog.ComponentError("JobManager", err.Error())
-		return nil, err
-	}
-	j.intervalSearch = intervalSearch
-
-	intervalConverged, err := time.ParseDuration(cfg.IntervalConverged)
-	if err != nil {
-		err := fmt.Errorf("failed to parse converged interval %s: %v", cfg.IntervalConverged, err.Error())
-		cclog.ComponentError("JobManager", err.Error())
-		return nil, err
-	}
-	j.intervalConverged = intervalConverged
 
 	/* The functions below initialize j.targetToOptimizer and j.targetToDevices */
 	switch cfg.Scope {
@@ -117,6 +94,11 @@ func NewJobManager(jobManagerStopped chan<- *JobManager, ctrl controller.Control
 		cclog.Fatalf("Requested unsupported scope: %s", cfg.Scope)
 	}
 
+	if err != nil {
+		return nil, err
+	}
+
+	j.aggregator, err = aggregator.New(cfg.AggCfg, j.allDevices(), j.DeviceType)
 	if err != nil {
 		return nil, err
 	}
@@ -185,6 +167,18 @@ func (j *JobManager) initScopeDevice(rawCfg json.RawMessage) error {
 	return nil
 }
 
+func (j *JobManager) allDevices() []aggregator.Target {
+	devices := make([]aggregator.Target, 0)
+
+	for _, deviceList := range j.targetToDevices {
+		for _, device := range deviceList {
+			devices = append(devices, device)
+		}
+	}
+
+	return devices
+}
+
 func (j *JobManager) AddInput(input chan lp.CCMessage) {
 	j.Input = input
 }
@@ -210,16 +204,15 @@ func (j *JobManager) Close() {
 func (j *JobManager) Start() {
 	j.wg.Add(1)
 
-	// Enable the ticker, which repeadetly notifies us to run the optimizer.
-	// We initially set the interval to something very low, to avoid startup delay.
-	j.optimizeTicker = time.NewTicker(time.Duration(1) * time.Second)
+	j.watchdogAttempt = 0
+	j.watchdogInterval = time.Duration(300) * time.Second
+	j.watchdogTicker = time.NewTicker(j.watchdogInterval)
 	j.started = true
 
 	j.Debug("Starting")
 
 	go func() {
 		j.warmUpDone = false
-		j.warmUpIterCount = 0
 
 		// Unfortunately we don't know the true start time of the job, so we have to manually
 		// measure the start time. Though, in practice they shouldn't differ by much.
@@ -230,7 +223,7 @@ func (j *JobManager) Start() {
 		for {
 			select {
 			case <-j.done:
-				j.optimizeTicker.Stop()
+				j.watchdogTicker.Stop()
 				j.ResetToDefault()
 				j.wg.Done()
 				j.stopped = true
@@ -245,68 +238,32 @@ func (j *JobManager) Start() {
 					// but the actual devices may not be managed by us.
 					break
 				}
-				j.aggregator.AggregateMetric(inputVal)
-			case <-j.optimizeTicker.C:
-				edpPerTarget := j.aggregator.GetEdpPerTarget()
-				if !j.warmUpDone {
-					j.UpdateWarmup(edpPerTarget)
-				} else {
-					j.UpdateNormal(edpPerTarget)
-				}
+				j.aggregator.MetricAdd(inputVal)
+				if j.aggregator.MetricsReady() {
+					j.Update(j.aggregator.GetEdpPerTarget())
+					j.aggregator.MetricsReset()
+					j.watchdogTicker.Reset(j.watchdogInterval)
 
-				maxDuration := time.Duration(j.Job.Walltime) * time.Second
-				if j.Job.Walltime > 0 && j.startTime.Add(maxDuration).Before(time.Now()) {
-					j.Debug("Job exceeded maximum walltime (%v). Stopping job manager...", j.Job.Walltime)
+					maxDuration := time.Duration(j.Job.Walltime) * time.Second
+					if j.Job.Walltime > 0 && j.startTime.Add(maxDuration).Before(time.Now()) {
+						j.Debug("Job exceeded maximum walltime (%v). Stopping job manager...", j.Job.Walltime)
+						j.done <- struct{}{}
+					}
+				}
+			case <-j.watchdogTicker.C:
+				j.Debug("Watchdog timer triggered. Did we receive any metrics? Make sure the configuration is correct")
+
+				if j.watchdogAttempt >= 3 {
+					j.Debug("Maximum number of watchdog timeouts triggered. Terminating job manager...")
 					j.done <- struct{}{}
 				}
+				j.watchdogAttempt++
 			}
 		}
 	}()
 }
 
-func (j *JobManager) UpdateWarmup(edpPerTarget map[aggregator.Target]float64) {
-	// TODO IMPORTANT: Afaik there is currently no logic which checks, whether we have
-	// received any new messages or not. If something is misconfigured we will happily optimize
-	// on garbage/out-of-date data. This is undesirable behavior.
-	j.Debug("Warming up...")
-	j.warmUpDone = true
-
-	for target, optimizer := range j.targetToOptimizer {
-		edp, ok := edpPerTarget[target]
-		if !ok {
-			if j.warmUpIterCount >= 10 {
-				cclog.Errorf("Unable to warmup. We didn't receive power and performance metrics for 10 iterations. Make sure the configured metrics are available.")
-			}
-			j.warmUpDone = false
-			continue
-		}
-
-		optimum, warmUpDoneTarget := optimizer.Start(edp)
-		if !warmUpDoneTarget {
-			// If just a single optimizer is not warmed up, don't go over to normal operation.
-			j.warmUpDone = false
-		}
-		optimumStr := fmt.Sprintf("%f", optimum)
-		j.Debug("%v: edp=%f --> optimum=%f", target, edp, optimum)
-
-		for _, device := range j.targetToDevices[target] {
-			j.ctrl.Set(j.Job.Cluster, device.HostName, j.DeviceType, device.DeviceId, j.cfg.ControlName, optimumStr)
-		}
-	}
-
-	if !j.warmUpDone {
-		// Wait until the next tick to run the warmup again
-		j.warmUpIterCount++
-		j.optimizeTicker.Reset(j.intervalSearch)
-		j.Debug("Not ready yet... (iteration=%d)", j.warmUpIterCount)
-		return
-	}
-
-	j.optimizeTicker.Reset(j.intervalConverged)
-	j.Debug("Warmup done! Took %d iterations.", j.warmUpIterCount)
-}
-
-func (j *JobManager) UpdateNormal(edpPerTarget map[aggregator.Target]float64) {
+func (j *JobManager) Update(edpPerTarget map[aggregator.Target]float64) {
 	for target, optimizer := range j.targetToOptimizer {
 		edp := edpPerTarget[target]
 
@@ -314,7 +271,7 @@ func (j *JobManager) UpdateNormal(edpPerTarget map[aggregator.Target]float64) {
 		j.Debug("%v: edp=%f --> optimum=%s", target, edp, optimum)
 
 		for _, device := range j.targetToDevices[target] {
-			j.ctrl.Set(j.Job.Cluster, device.HostName, j.DeviceType, device.DeviceId, j.cfg.ControlName, optimum)
+			j.ctrl.Set(j.Job.Cluster, string(device.HostName), j.DeviceType, string(device.DeviceId), j.cfg.ControlName, optimum)
 		}
 	}
 }
@@ -330,7 +287,7 @@ func (j *JobManager) ResetToDefault() {
 	j.Debug("Resetting device to default value...")
 	for target := range j.targetToOptimizer {
 		for _, device := range j.targetToDevices[target] {
-			j.ctrl.Set(j.Job.Cluster, device.HostName, j.DeviceType, device.DeviceId, j.cfg.ControlName, v)
+			j.ctrl.Set(j.Job.Cluster, string(device.HostName), j.DeviceType, string(device.DeviceId), j.cfg.ControlName, v)
 		}
 	}
 }

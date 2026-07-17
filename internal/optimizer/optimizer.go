@@ -10,7 +10,6 @@ import (
 )
 
 type Optimizer interface {
-	Start(float64) (float64, bool)
 	Update(float64) float64
 	GetBordersCfg() (float64, float64)
 	GetBordersCur() (float64, float64)
@@ -31,10 +30,6 @@ func NewOptimizer(rawConfig json.RawMessage) (Optimizer, error) {
 		return NewGssNgOptimizer(rawConfig)
 	case "test":
 		return NewTestOptimizer(rawConfig)
-	//case "wqr":
-	//	return NewWQROptimizer(rawConfig)
-	//case "pr":
-	//	return NewPROptimizer(rawConfig)
 	default:
 		return nil, fmt.Errorf("invalid/unsupported optimizer type: %s", cfg.Type)
 	}

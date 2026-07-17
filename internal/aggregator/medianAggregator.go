@@ -7,6 +7,7 @@ package aggregator
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 
 	cclog "github.com/ClusterCockpit/cc-lib/v2/ccLogger"
 	lp "github.com/ClusterCockpit/cc-lib/v2/ccMessage"
@@ -14,100 +15,224 @@ import (
 )
 
 type MedianAggregatorConfig struct {
-	DeviceType        string  `json:"deviceType"`
-	BasePower         float64 `json:"basePower"`
-	PowerMetric       string  `json:"powerMetric"`
-	PerformanceMetric string  `json:"performanceMetric"`
-	ReductionMode     string  `json:"reductionMode"`
+	DeviceType         string   `json:"deviceType"`
+	BasePower          float64  `json:"basePower"`
+	WindowSize         int       `json:"windowSize"`
+	PowerMetrics       map[string]MetricRange `json:"powerMetric"`
+	PerformanceMetrics map[string]MetricRange `json:"performanceMetric"`
+	ReductionMode      string   `json:"reductionMode"`
 }
 
-type MedianDeviceState struct {
-	powerSamples       []float64
-	performanceSamples []float64
-	powerReset         bool
-	performanceReset   bool
+type MetricStaged struct {
+	power       float64
+	performance float64
 }
 
 type MedianAggregator struct {
-	// map[hostname]map[deviceId]MedianDeviceState
-	devices           map[string]map[string]*MedianDeviceState
-	powerMetric       string
-	performanceMetric string
-	deviceType        string
+	// map[hostname][index]map[deviceId]MetricStaged
+	metricsStaged      map[HostNameString][]map[DeviceIdString]MetricStaged
+	metricsReady       bool
+	devicesToManage    map[HostNameString]map[DeviceIdString]struct{}
+
+	powerMetrics       map[MetricNameString]MetricRange
+	performanceMetrics map[MetricNameString]MetricRange
+
+	metricsIncoming   map[HostNameString]map[DeviceIdString]map[MetricNameString]TargetMetricValue
+
+	windowSize        int
+	deviceType        DeviceTypeString
 	basePower         float64
 	edpReductionMode  EdpReductionMode
 }
 
-func NewMedianAggregator(rawConfig json.RawMessage) (*MedianAggregator, error) {
-	ag := &MedianAggregator{}
+func NewMedianAggregator(rawConfig json.RawMessage, devices []Target, deviceType string) (*MedianAggregator, error) {
+	a := &MedianAggregator{}
 	var config MedianAggregatorConfig
 
-	if err := json.Unmarshal(rawConfig, &config); err != nil {
-		cclog.Warnf("Init() > Unmarshal error: %#v", err)
+	err := json.Unmarshal(rawConfig, &config)
+	if err != nil {
+		cclog.Errorf("MedianAggregator config error: %#v", err)
 		return nil, err
 	}
 
-	if config.PowerMetric == "" || config.PerformanceMetric == "" || config.DeviceType == "" {
-		err := fmt.Errorf("Init() : empty metric configuration")
-		cclog.Errorf("Init() > config.Path error: %v", err)
-		return nil, err
+	if len(config.PowerMetrics) == 0 {
+		return nil, fmt.Errorf("PowerMetrics map must not be empty")
 	}
 
-	ag.powerMetric = config.PowerMetric
-	ag.performanceMetric = config.PerformanceMetric
-	ag.devices = make(map[string]map[string]*MedianDeviceState)
-	ag.deviceType = config.DeviceType
-	ag.basePower = config.BasePower
+	if len(config.PerformanceMetrics) == 0 {
+		return nil, fmt.Errorf("PerformanceMetrics map must not be empty")
+	}
 
-	var err error
-	ag.edpReductionMode, err = EdpReductionModeParse(config.ReductionMode)
+	if config.DeviceType == "" {
+		return nil, fmt.Errorf("DeviceType must not be empty")
+	}
+
+	a.devicesToManage = make(map[HostNameString]map[DeviceIdString]struct{})
+	for _, device := range devices {
+		devicesToManageForHost, ok := a.devicesToManage[device.HostName]
+		if !ok {
+			devicesToManageForHost = make(map[DeviceIdString]struct{})
+			a.devicesToManage[device.HostName] = devicesToManageForHost
+		}
+		devicesToManageForHost[device.DeviceId] = struct{}{}
+	}
+	a.MetricsReset()
+
+	a.powerMetrics = make(map[MetricNameString]MetricRange)
+	for metricName, metricRange := range config.PowerMetrics {
+		a.powerMetrics[MetricNameString(metricName)] = metricRange.ConfigInit()
+	}
+	a.performanceMetrics = make(map[MetricNameString]MetricRange)
+	for metricName, metricRange := range config.PerformanceMetrics {
+		a.performanceMetrics[MetricNameString(metricName)] = metricRange.ConfigInit()
+	}
+
+	a.deviceType = DeviceTypeString(config.DeviceType)
+	a.basePower = config.BasePower
+	if a.basePower < 0.0 {
+		return nil, fmt.Errorf("basePower must not be negative")
+	}
+	if config.WindowSize < 0 {
+		return nil, fmt.Errorf("windowSize must not be negative")
+	} else if config.WindowSize == 0 {
+		a.windowSize = 1
+	} else {
+		a.windowSize = config.WindowSize
+	}
+
+	a.edpReductionMode, err = EdpReductionModeParse(config.ReductionMode)
 	if err != nil {
 		return nil, err
 	}
 
-	return ag, nil
+	return a, nil
 }
 
-func (a *MedianAggregator) AggregateMetric(m lp.CCMessage) {
-	hostname, deviceId, value, ok := checkAndGetMetricFields(m, a.deviceType)
+func (a *MedianAggregator) MetricAdd(ccMessage lp.CCMessage) {
+	m, ok := metricCheckAndGet(ccMessage, a.deviceType)
 	if !ok {
 		return
 	}
 
-	var deviceState *MedianDeviceState
-	if m.Name() == a.powerMetric || m.Name() == a.performanceMetric {
-		devicesOfHostState, ok := a.devices[hostname]
-		if !ok {
-			devicesOfHostState = make(map[string]*MedianDeviceState)
-			a.devices[hostname] = devicesOfHostState
+	_, isPower := a.powerMetrics[m.MetricName]
+	_, isPerformance := a.performanceMetrics[m.MetricName]
+	isEndOfBatch := m.MetricName == "ccmc-end"
+
+	if !isPower && !isPerformance && !isEndOfBatch {
+		// metric is not of interest
+		return
+	}
+
+	// Incoming metrics are put into 'metricsIncoming'.
+	// We do this in order to have a 'batch' of metrics, which were
+	// likely obtained during the same ccmc run. That way the calculations
+	// do not use metrics, which don't belong together.
+	// As soon as 'batch' is complete, we put the calculated power and performance
+	// into our history buffer 'metricsStaged'.
+	// 
+	// It is important that ccmc-{begin,end} marker metrics are being send
+	// Otherwise ccmc will not function, since it doesn't reliably know, which
+	// metrics belong together
+
+	if isEndOfBatch {
+		a.metricsStage(m.HostName)
+		a.metricsReadyUpdate()
+	} else {
+		if a.metricsIncoming[m.HostName] == nil {
+			a.metricsIncoming[m.HostName] = make(map[DeviceIdString]map[MetricNameString]TargetMetricValue)
+		}
+		if a.metricsIncoming[m.HostName][m.DeviceId] == nil {
+			a.metricsIncoming[m.HostName][m.DeviceId] = make(map[MetricNameString]TargetMetricValue)
+		}
+		if _, ok := a.metricsIncoming[m.HostName][m.DeviceId][m.MetricName]; ok {
+			cclog.Warnf("Received metrics '%v' without getting a 'ccmc-end' metric inbetween. Make sure markers-enabled is set in your cc-metric-collector config", m.MetricName)
+		}
+		a.metricsIncoming[m.HostName][m.DeviceId][m.MetricName] = m
+	}
+}
+
+func (a *MedianAggregator) MetricsReady() bool {
+	return a.metricsReady
+}
+
+func (a *MedianAggregator) metricsStage(hostname HostNameString) {
+	// Check if all metrics for te specified host were received.
+	// If so, stage them. If not, don't do anything and return.
+
+	samplesToStage := make(map[DeviceIdString]MetricStaged)
+
+	for deviceId, _ := range a.devicesToManage[hostname] {
+		metricReceived := func(metricName MetricNameString) (float64, bool) {
+			deviceIds, ok := a.metricsIncoming[hostname];
+			if !ok {
+				return 0.0, false
+			}
+			metrics, ok := deviceIds[deviceId]
+			if !ok {
+				return 0.0, false
+			}
+			metric, ok := metrics[metricName]
+			if !ok {
+				return 0.0, false
+			}
+			return metric.Value, true
 		}
 
-		deviceState, ok = devicesOfHostState[deviceId]
-		if !ok {
-			deviceState = &MedianDeviceState{
-				powerSamples:       make([]float64, 0),
-				performanceSamples: make([]float64, 0),
+		powerSumForDevice := 0.0
+		for reqMetricName, reqMetricRange := range a.powerMetrics {
+			powerMetricValue, ok := metricReceived(reqMetricName)
+			if !ok {
+				return
 			}
-			devicesOfHostState[deviceId] = deviceState
+			powerSumForDevice += reqMetricRange.Apply(powerMetricValue)
+		}
+
+		performanceProductForDevice := 1.0
+		for reqMetricName, reqMetricRange := range a.powerMetrics {
+			performanceMetricValue, ok := metricReceived(reqMetricName)
+			if !ok {
+				return
+			}
+			performanceProductForDevice *= reqMetricRange.Apply(performanceMetricValue)
+		}
+
+		samplesToStage[deviceId] = MetricStaged{
+			power: powerSumForDevice,
+			performance: performanceProductForDevice,
 		}
 	}
 
-	if m.Name() == a.powerMetric {
-		// insert measurement into history, discard old values if aggregation was performed since last metric
-		if deviceState.powerReset {
-			deviceState.powerSamples = make([]float64, 0)
-			deviceState.powerReset = false
-		}
+	// Now that we know we have all required metrics for a host, actually stage the metrics
+	metricsStagedForHost, ok := a.metricsStaged[hostname]
+	if !ok {
+		metricsStagedForHost = make([]map[DeviceIdString]MetricStaged, 0)
+	}
+	metricsStagedForHost = append(metricsStagedForHost, samplesToStage)
+	a.metricsStaged[hostname] = metricsStagedForHost
+}
 
-		deviceState.powerSamples = append(deviceState.powerSamples, value)
-	} else if m.Name() == a.performanceMetric {
-		// create host specific map if it does not exist yet
-		if deviceState.performanceReset {
-			deviceState.performanceSamples = make([]float64, 0)
-			deviceState.performanceReset = false
-		}
+func (a *MedianAggregator) metricsReadyUpdate() {
+	// Check if we are now ready for the final aggregation.
+	// This is the case, when we have at least N samples, where N is the configured
+	// window size.
+	// Should the window size drift too apart from multiple hosts (> 2), we issue
+	// a warning.
 
-		deviceState.performanceSamples = append(deviceState.performanceSamples, value)
+	minSampleCount := math.MaxInt
+	maxSampleCount := 0
+	for _, metricsStagedForHost := range a.metricsStaged {
+		minSampleCount = min(minSampleCount, len(metricsStagedForHost))
+		maxSampleCount = max(maxSampleCount, len(metricsStagedForHost))
+	}
+
+	if maxSampleCount - minSampleCount > 2 {
+		cclog.Warnf("Detected desync in metrics received. Received %d batches of metrics from one host, " +
+			"while only receiving %d from another. " +
+			"Is cc-metric-collector configured correctly on all nodes?", maxSampleCount, minSampleCount)
+	}
+
+	if minSampleCount > a.windowSize {
+		a.metricsReady = true
 	}
 }
 
@@ -115,25 +240,43 @@ func (a *MedianAggregator) GetEdpPerTarget() map[Target]float64 {
 	// calculate energy delay product (EDP) per host and per device
 	edp := make(map[string]map[string]float64)
 
-	for hostname, deviceIdToState := range a.devices {
-		edp[hostname] = make(map[string]float64)
+	for hostname, samplesForHost := range a.metricsStaged {
+		edp[string(hostname)] = make(map[string]float64)
 
-		for deviceId, deviceState := range deviceIdToState {
-			if len(deviceState.powerSamples) == 0 || len(deviceState.performanceSamples) == 0 {
-				// Initially it may happen that we haven't received a performance sample yet.
-				// Ignore, since it will hopefully arrive until the next iteration.
-				continue
+		samples := make(map[DeviceIdString]struct{
+			power []float64
+			performance []float64
+		}, len(samplesForHost))
+
+		for _, deviceSamples := range samplesForHost {
+			for deviceId, deviceSample := range deviceSamples {
+				samplesForDevice, ok := samples[deviceId]
+				if !ok {
+					samplesForDevice.power = make([]float64, 0)
+					samplesForDevice.performance = make([]float64, 0)
+				}
+				samplesForDevice.power = append(samplesForDevice.power, deviceSample.power)
+				samplesForDevice.performance = append(samplesForDevice.performance, deviceSample.performance)
+				samples[deviceId] = samplesForDevice
+			}
+		}
+
+		for deviceId, samplesForDevice := range samples {
+			if len(samplesForDevice.power) == 0 || len(samplesForDevice.performance) == 0 {
+				cclog.Panicf("BUG: empty sample list")
 			}
 
-			// The length of both sample arrays is always > 0, thus Median can't fail.
-			powerMedian, _ := util.Median(deviceState.powerSamples)
-			performanceMedian, _ := util.Median(deviceState.performanceSamples)
-			edp[hostname][deviceId] = (powerMedian + a.basePower) / (performanceMedian * performanceMedian)
-
-			deviceState.powerReset = true
-			deviceState.performanceReset = true
+			powerMedian, _ := util.Median(samplesForDevice.power)
+			performanceMedian, _ := util.Median(samplesForDevice.performance)
+			edp[string(hostname)][string(deviceId)] = (powerMedian + a.basePower) / (performanceMedian * performanceMedian)
 		}
 	}
 
 	return DeviceEdpToTargetEdp(edp, a.edpReductionMode)
+}
+
+func (a *MedianAggregator) MetricsReset() {
+	a.metricsIncoming = make(map[HostNameString]map[DeviceIdString]map[MetricNameString]TargetMetricValue)
+	a.metricsStaged = make(map[HostNameString][]map[DeviceIdString]MetricStaged)
+	a.metricsReady = false
 }
