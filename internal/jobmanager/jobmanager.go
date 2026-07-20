@@ -302,8 +302,10 @@ func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
 		return false
 	}
 
-	if deviceType != j.DeviceType {
+	if deviceType != j.DeviceType && m.Name() != "ccmc-end" {
 		// Metric device type doesn't belong to the device type that we want to optimizer for
+		// We do not bail out for "ccmc-end", because this is the marker metric required downstream to
+		// determine the end of batches.
 		return false
 	}
 
