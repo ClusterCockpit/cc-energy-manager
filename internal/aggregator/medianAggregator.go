@@ -17,8 +17,8 @@ import (
 type MedianAggregatorConfig struct {
 	BasePower          float64                `json:"basePower"`
 	WindowSize         int                    `json:"windowSize"`
-	PowerMetrics       map[string]MetricRange `json:"powerMetric"`
-	PerformanceMetrics map[string]MetricRange `json:"performanceMetric"`
+	PowerMetrics       map[string]MetricRange `json:"powerMetrics"`
+	PerformanceMetrics map[string]MetricRange `json:"performanceMetrics"`
 	ReductionMode      string                 `json:"reductionMode"`
 }
 
