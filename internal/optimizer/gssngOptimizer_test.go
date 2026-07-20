@@ -79,9 +79,8 @@ func TestUpperBarrier(t *testing.T) {
 
 	in := 400.0
 	var out float64
-	ok := false
 
-	for !ok {
+	for range 10 {
 		out = o.Update(in)
 		in = f(out)
 	}
@@ -120,9 +119,8 @@ func TestNoise(t *testing.T) {
 
 	in := 100.0
 	var out float64
-	ok := false
 
-	for !ok {
+	for range 10 {
 		out = o.Update(in)
 		in = 100
 	}
@@ -181,9 +179,8 @@ func TestUpperBarrierAndMove(t *testing.T) {
 
 	in := 400.0
 	var out float64
-	ok := false
 
-	for !ok {
+	for range 10 {
 		out = o.Update(in)
 		in = f(out)
 	}
