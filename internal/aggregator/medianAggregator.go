@@ -15,7 +15,6 @@ import (
 )
 
 type MedianAggregatorConfig struct {
-	DeviceType         string                 `json:"deviceType"`
 	BasePower          float64                `json:"basePower"`
 	WindowSize         int                    `json:"windowSize"`
 	PowerMetrics       map[string]MetricRange `json:"powerMetric"`
@@ -63,10 +62,6 @@ func NewMedianAggregator(rawConfig json.RawMessage, devices []Target, deviceType
 		return nil, fmt.Errorf("PerformanceMetrics map must not be empty")
 	}
 
-	if config.DeviceType == "" {
-		return nil, fmt.Errorf("DeviceType must not be empty")
-	}
-
 	a.devicesToManage = make(map[HostNameString]map[DeviceIdString]struct{})
 	for _, device := range devices {
 		devicesToManageForHost, ok := a.devicesToManage[device.HostName]
@@ -87,7 +82,7 @@ func NewMedianAggregator(rawConfig json.RawMessage, devices []Target, deviceType
 		a.performanceMetrics[MetricNameString(metricName)] = metricRange.ConfigInit()
 	}
 
-	a.deviceType = DeviceTypeString(config.DeviceType)
+	a.deviceType = DeviceTypeString(deviceType)
 	a.basePower = config.BasePower
 	if a.basePower < 0.0 {
 		return nil, fmt.Errorf("basePower must not be negative")
