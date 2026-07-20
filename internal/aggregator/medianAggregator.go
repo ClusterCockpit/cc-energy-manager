@@ -151,9 +151,10 @@ func (a *MedianAggregator) MetricsReady() bool {
 }
 
 func (a *MedianAggregator) metricsStage(hostname HostNameString) {
+	cclog.ComponentDebugf("MedianAggregator", "Trying to stage metrics")
+
 	// Check if all metrics for te specified host were received.
 	// If so, stage them. If not, don't do anything and return.
-
 	samplesToStage := make(map[DeviceIdString]MetricStaged)
 
 	for deviceId, _ := range a.devicesToManage[hostname] {
