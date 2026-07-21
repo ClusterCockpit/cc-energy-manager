@@ -111,7 +111,7 @@ func (a *MedianAggregator) MetricAdd(ccMessage lp.CCMessage) {
 
 	_, isPower := a.powerMetrics[m.MetricName]
 	_, isPerformance := a.performanceMetrics[m.MetricName]
-	isEndOfBatch := m.MetricName == "ccmc-end"
+	isEndOfBatch := MetricIsEndMarker(ccMessage)
 
 	if !isPower && !isPerformance && !isEndOfBatch {
 		// metric is not of interest

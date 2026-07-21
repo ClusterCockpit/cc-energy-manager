@@ -238,6 +238,7 @@ func (j *JobManager) Start() {
 					// but the actual devices may not be managed by us.
 					break
 				}
+
 				j.aggregator.MetricAdd(inputVal)
 				if j.aggregator.MetricsReady() {
 					j.Update(j.aggregator.GetEdpPerTarget())
@@ -302,7 +303,7 @@ func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
 		return false
 	}
 
-	if deviceType != j.DeviceType && m.Name() != "ccmc-end" {
+	if deviceType != j.DeviceType && !aggregator.MetricIsEndMarker(m) {
 		// Metric device type doesn't belong to the device type that we want to optimizer for
 		// We do not bail out for "ccmc-end", because this is the marker metric required downstream to
 		// determine the end of batches.
@@ -310,7 +311,7 @@ func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
 	}
 
 	deviceId, ok := m.GetTag("type-id")
-	if !ok && deviceType != "node" {
+	if !ok && !aggregator.MetricIsEndMarker(m) {
 		j.Debug("Received metric without 'type-id' tag: %s", m)
 		return false
 	}
@@ -321,6 +322,7 @@ func (j *JobManager) ManagesDeviceOfMetric(m lp.CCMessage) bool {
 
 			// If the metric's deviceId is present in the list of devices associated with this job manager,
 			// accept the message. If not, discard the message
+
 			return slices.Index(deviceIds, deviceId) >= 0
 		}
 	}

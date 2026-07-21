@@ -298,7 +298,7 @@ func metricCheckAndGet(m lp.CCMessage, wantedDeviceType DeviceTypeString) (retva
 	}
 	retval.DeviceType = DeviceTypeString(deviceType)
 
-	if retval.DeviceType != wantedDeviceType {
+	if retval.DeviceType != wantedDeviceType && !MetricIsEndMarker(m) {
 		// this log message can probably be removed, since this case is not unusual
 		// cclog.Debugf("Ignoring metric of non-matching type '%s', wanted '%s'", deviceType, a.deviceType)
 		ok = false
@@ -306,14 +306,16 @@ func metricCheckAndGet(m lp.CCMessage, wantedDeviceType DeviceTypeString) (retva
 	}
 
 	deviceId, ok := m.GetTag("type-id")
-	if !ok {
+	if !ok && !MetricIsEndMarker(m) {
 		cclog.Errorf("Unable to aggregate metric: missing field type-id: %+v", m)
 		return
 	}
+
 	retval.DeviceId = DeviceIdString(deviceId)
 
 	retval.MetricName = MetricNameString(m.Name())
 	retval.Tm = m.Time()
+	ok = true
 
 	return
 }
@@ -328,4 +330,12 @@ func (r *MetricRange) ConfigInit() MetricRange {
 		retval.MaxValue = math.Inf(1)
 	}
 	return retval
+}
+
+func MetricIsEndMarker(m lp.CCMessage) bool {
+	deviceType, ok := m.GetTag("type")
+	if !ok {
+		return false
+	}
+	return deviceType == "node" && m.Name() == "ccmc-end"
 }

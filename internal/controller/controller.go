@@ -131,7 +131,7 @@ func (c *ccController) Close() {
 func (c *ccController) GetDeviceIdsForResources(cluster string, deviceType string, resource *ccspecs.Resource) []string {
 	switch deviceType {
 	case "node":
-		return []string{"0"}
+		return []string{""}
 	case "socket":
 		sockets, err := c.hwthreadsToSockets(cluster, resource.Hostname, resource.HWThreads)
 		if err != nil {
