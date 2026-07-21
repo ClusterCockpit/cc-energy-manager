@@ -31,12 +31,13 @@ type MedianAggregator struct {
 	// map[hostname][index]map[deviceId]MetricStaged
 	metricsStaged   map[HostNameString][]map[DeviceIdString]MetricStaged
 	metricsReady    bool
+	metricsIncoming map[HostNameString]map[DeviceIdString]map[MetricNameString]TargetMetricValue
+	metricsIncomingTainted bool
+
 	devicesToManage map[HostNameString]map[DeviceIdString]struct{}
 
 	powerMetrics       map[MetricNameString]MetricRange
 	performanceMetrics map[MetricNameString]MetricRange
-
-	metricsIncoming map[HostNameString]map[DeviceIdString]map[MetricNameString]TargetMetricValue
 
 	windowSize       int
 	deviceType       DeviceTypeString
@@ -184,7 +185,7 @@ func (a *MedianAggregator) metricsStage(hostname HostNameString) {
 		}
 
 		performanceProductForDevice := 1.0
-		for reqMetricName, reqMetricRange := range a.powerMetrics {
+		for reqMetricName, reqMetricRange := range a.performanceMetrics {
 			performanceMetricValue, ok := metricReceived(reqMetricName)
 			if !ok {
 				return
@@ -198,6 +199,17 @@ func (a *MedianAggregator) metricsStage(hostname HostNameString) {
 		}
 	}
 
+	// If the current measurement is marked as dirty, skip this staging.
+	// This will be necessary, if a powercap/freqcap is changed during a measurement.
+	// In that case the results will all be invalid, and thus have to be discarded due
+	// to being tainted.
+	if a.metricsIncomingTainted {
+		a.MetricsResetIncoming()
+		a.metricsIncomingTainted = false
+		cclog.Debugf("Metrics were tainted, retrying...")
+		return
+	}
+
 	// Now that we know we have all required metrics for a host, actually stage the metrics
 	metricsStagedForHost, ok := a.metricsStaged[hostname]
 	if !ok {
@@ -205,6 +217,8 @@ func (a *MedianAggregator) metricsStage(hostname HostNameString) {
 	}
 	metricsStagedForHost = append(metricsStagedForHost, samplesToStage)
 	a.metricsStaged[hostname] = metricsStagedForHost
+
+	a.MetricsResetIncoming()
 }
 
 func (a *MedianAggregator) metricsReadyUpdate() {
@@ -213,6 +227,10 @@ func (a *MedianAggregator) metricsReadyUpdate() {
 	// window size.
 	// Should the window size drift too apart from multiple hosts (> 2), we issue
 	// a warning.
+
+	if len(a.metricsStaged) == 0 {
+		return
+	}
 
 	minSampleCount := math.MaxInt
 	maxSampleCount := 0
@@ -227,12 +245,16 @@ func (a *MedianAggregator) metricsReadyUpdate() {
 			"Is cc-metric-collector configured correctly on all nodes?", maxSampleCount, minSampleCount)
 	}
 
-	if minSampleCount > a.windowSize {
+	if minSampleCount >= a.windowSize {
 		a.metricsReady = true
 	}
 }
 
 func (a *MedianAggregator) GetEdpPerTarget() map[Target]float64 {
+	if !a.metricsReady {
+		cclog.Panicf("BUG: GetEdpPerTarget called, even though no metrics are ready")
+	}
+
 	// calculate energy delay product (EDP) per host and per device
 	edp := make(map[string]map[string]float64)
 
@@ -271,8 +293,17 @@ func (a *MedianAggregator) GetEdpPerTarget() map[Target]float64 {
 	return DeviceEdpToTargetEdp(edp, a.edpReductionMode)
 }
 
-func (a *MedianAggregator) MetricsReset() {
+func (a *MedianAggregator) MetricsResetIncoming() {
 	a.metricsIncoming = make(map[HostNameString]map[DeviceIdString]map[MetricNameString]TargetMetricValue)
+}
+
+func (a *MedianAggregator) MetricsResetStaged() {
 	a.metricsStaged = make(map[HostNameString][]map[DeviceIdString]MetricStaged)
 	a.metricsReady = false
+}
+
+func (a *MedianAggregator) MetricsReset() {
+	a.MetricsResetIncoming()
+	a.MetricsResetStaged()
+	a.metricsIncomingTainted = true
 }
