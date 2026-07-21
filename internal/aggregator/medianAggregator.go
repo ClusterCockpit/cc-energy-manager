@@ -29,9 +29,9 @@ type MetricStaged struct {
 
 type MedianAggregator struct {
 	// map[hostname][index]map[deviceId]MetricStaged
-	metricsStaged   map[HostNameString][]map[DeviceIdString]MetricStaged
-	metricsReady    bool
-	metricsIncoming map[HostNameString]map[DeviceIdString]map[MetricNameString]TargetMetricValue
+	metricsStaged          map[HostNameString][]map[DeviceIdString]MetricStaged
+	metricsReady           bool
+	metricsIncoming        map[HostNameString]map[DeviceIdString]map[MetricNameString]TargetMetricValue
 	metricsIncomingTainted bool
 
 	devicesToManage map[HostNameString]map[DeviceIdString]struct{}
