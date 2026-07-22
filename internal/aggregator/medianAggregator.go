@@ -73,6 +73,7 @@ func NewMedianAggregator(rawConfig json.RawMessage, devices []Target, deviceType
 		devicesToManageForHost[device.DeviceId] = struct{}{}
 	}
 	a.MetricsReset()
+	a.metricsIncomingTainted = true
 
 	a.powerMetrics = make(map[MetricNameString]MetricRange)
 	for metricName, metricRange := range config.PowerMetrics {
@@ -305,5 +306,11 @@ func (a *MedianAggregator) MetricsResetStaged() {
 func (a *MedianAggregator) MetricsReset() {
 	a.MetricsResetIncoming()
 	a.MetricsResetStaged()
-	a.metricsIncomingTainted = true
+
+	if len(a.devicesToManage) > 1 {
+		// If we have more than one host part of our job, we have to assume that metrics
+		// do not come in synchronous. Thus we have to discard everything incoming, because
+		// we can't be sure, whether it's partially affected by a different power/freq limit.
+		a.metricsIncomingTainted = true
+	}
 }
